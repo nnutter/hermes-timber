@@ -125,6 +125,31 @@ afterEach(() => {
 });
 
 describe("Timber desktop panel", () => {
+  it.each([
+    [true, true, "Merged", "success"],
+    [false, true, "Merged", "warn"],
+    [true, false, "Clean", "muted"],
+    [false, false, "Dirty", "warn"],
+  ])(
+    "shows one status badge for clean=%s merged=%s",
+    async (isClean, merged, label, variant) => {
+      rest.mockResolvedValue({
+        ...state,
+        worktrees: [{ ...clean, clean: isClean, merged }],
+      });
+      mount();
+      await loaded();
+      const row = screen.getByRole("listitem");
+      expect(within(row).getByText(label)).toHaveAttribute(
+        "data-variant",
+        variant,
+      );
+      expect(within(row).queryAllByText(/^(Clean|Dirty|Merged)$/)).toHaveLength(
+        1,
+      );
+    },
+  );
+
   it.each([401, 403])(
     "pauses automatic reads after HTTP %i until explicit retry",
     async (status) => {

@@ -679,10 +679,15 @@ function ScopedPanel({
                         children: /* @__PURE__ */ jsx(Codicon, { name: "add" })
                       }
                     ),
-                    /* @__PURE__ */ jsx(Badge, { variant: worktree.clean ? "muted" : "warn", children: worktree.clean ? "Clean" : "Dirty" }),
-                    worktree.merged && /* @__PURE__ */ jsx(Badge, { variant: "success", children: "Merged" }),
+                    /* @__PURE__ */ jsx(
+                      Badge,
+                      {
+                        variant: !worktree.clean ? "warn" : worktree.merged ? "success" : "muted",
+                        children: worktree.merged ? "Merged" : worktree.clean ? "Clean" : "Dirty"
+                      }
+                    ),
                     worktree.statusError && /* @__PURE__ */ jsx(Badge, { variant: "destructive", children: "Status error" }),
-                    /* @__PURE__ */ jsxs("span", { style: muted, children: [
+                    /* @__PURE__ */ jsxs("span", { style: { ...muted, marginLeft: 4 }, children: [
                       "\u2191",
                       worktree.ahead ?? 0,
                       " \u2193",
@@ -693,6 +698,7 @@ function ScopedPanel({
                       {
                         style: {
                           ...muted,
+                          marginLeft: 4,
                           display: "inline-flex",
                           alignItems: "center",
                           gap: 4

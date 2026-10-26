@@ -648,20 +648,32 @@ function ScopedPanel({
               >
                 <Codicon name="add" />
               </Button>
-              <Badge variant={worktree.clean ? "muted" : "warn"}>
-                {worktree.clean ? "Clean" : "Dirty"}
+              <Badge
+                variant={
+                  !worktree.clean
+                    ? "warn"
+                    : worktree.merged
+                      ? "success"
+                      : "muted"
+                }
+              >
+                {worktree.merged
+                  ? "Merged"
+                  : worktree.clean
+                    ? "Clean"
+                    : "Dirty"}
               </Badge>
-              {worktree.merged && <Badge variant="success">Merged</Badge>}
               {worktree.statusError && (
                 <Badge variant="destructive">Status error</Badge>
               )}
-              <span style={muted}>
+              <span style={{ ...muted, marginLeft: 4 }}>
                 ↑{worktree.ahead ?? 0} ↓{worktree.behind ?? 0}
               </span>
               {worktree.todoTotal !== undefined && (
                 <span
                   style={{
                     ...muted,
+                    marginLeft: 4,
                     display: "inline-flex",
                     alignItems: "center",
                     gap: 4,

@@ -59,11 +59,11 @@ export function Input(props: ComponentProps<"input">) {
   return <input {...props} />;
 }
 export function Badge({
-  variant: _variant,
+  variant,
   size: _size,
   ...props
 }: ComponentProps<"span"> & { variant?: string; size?: string }) {
-  return <span {...props} />;
+  return <span data-variant={variant} {...props} />;
 }
 
 export function Codicon({
