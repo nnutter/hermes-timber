@@ -23,7 +23,7 @@ const plugin: HermesPlugin = {
       id: "hermes-timber.show",
       label: "Show Timber worktrees",
       category: "view",
-      defaults: ["mod+alt+shift+t"],
+      defaults: ["ctrl+t"],
       run: () => host.revealPane("hermes-timber:panel"),
     };
     context.register({ id: "shortcut", area: KEYBINDS_AREA, data: shortcut });

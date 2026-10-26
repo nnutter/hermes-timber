@@ -811,7 +811,7 @@ describe("Timber desktop panel", () => {
       !("defaults" in binding)
     )
       throw new Error("No keybind");
-    expect(binding.defaults).toEqual(["mod+alt+shift+t"]);
+    expect(binding.defaults).toEqual(["ctrl+t"]);
     binding.run();
     expect(host.revealPane).toHaveBeenCalledWith("hermes-timber:panel");
   });
