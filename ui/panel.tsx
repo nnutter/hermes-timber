@@ -1,0 +1,657 @@
+import { useEffect, useRef, useState } from "react";
+import type { CSSProperties, FormEvent } from "react";
+import {
+  Badge,
+  Button,
+  host,
+  Input,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@hermes/plugin-sdk";
+import type { PluginContext } from "@hermes/plugin-sdk";
+import {
+  fuzzyMatch,
+  isWorktree,
+  message,
+  parsePreview,
+  parseState,
+  record,
+  responseWarnings,
+  safeToRemove,
+} from "./contracts";
+import type { RemovePreview, Worktree } from "./contracts";
+import { assertScope, scopeKey, useScope } from "./scope";
+
+const stack: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 10,
+  minWidth: 0,
+};
+const row: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  flexWrap: "wrap",
+  gap: 6,
+};
+const muted: CSSProperties = {
+  color: "var(--ui-text-secondary)",
+  fontSize: 12,
+  overflowWrap: "anywhere",
+};
+const selectStyle: CSSProperties = {
+  color: "var(--ui-text-primary)",
+  background: "var(--ui-bg-secondary)",
+  border: "1px solid var(--ui-stroke-secondary)",
+  borderRadius: 4,
+  padding: 6,
+  width: "100%",
+  minWidth: 0,
+};
+
+export function TimberPanel({ context }: { context: PluginContext }) {
+  const scope = useScope();
+  // A different route gets a fresh local state, including destructive consent.
+  return (
+    <ScopedPanel
+      key={scope.key}
+      context={context}
+      scope={scope.key}
+      online={scope.online}
+    />
+  );
+}
+
+function ScopedPanel({
+  context,
+  scope,
+  online,
+}: {
+  context: PluginContext;
+  scope: string;
+  online: boolean;
+}) {
+  const client = useQueryClient();
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+  const current = () => alive.current && scopeKey() === scope;
+  const queryKey = ["hermes-timber", scope, "state"] as const;
+  const listing = useQuery({
+    queryKey,
+    queryFn: async () => {
+      assertScope(scope);
+      const result = parseState(await context.rest<unknown>("/state"));
+      assertScope(scope);
+      return result;
+    },
+    enabled: online,
+    refetchInterval: 15_000,
+    retry: false,
+    staleTime: 10_000,
+  });
+  const [search, setSearch] = useState("");
+  const [repo, setRepo] = useState("");
+  const [status, setStatus] = useState("all");
+  const [sort, setSort] = useState("recent");
+  const [creating, setCreating] = useState(false);
+  const [createRepo, setCreateRepo] = useState("");
+  const [name, setName] = useState("");
+  const [upstream, setUpstream] = useState("");
+  const [preview, setPreview] = useState<RemovePreview | null>(null);
+  const [notice, setNotice] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [recent, setRecent] = useState<Record<string, number>>({});
+  const data = listing.data;
+  const ready = online && Boolean(data) && !listing.isError;
+
+  const check = () => {
+    assertScope(scope);
+    if (
+      !alive.current ||
+      client.getQueryState(queryKey)?.status !== "success"
+    ) {
+      throw new Error(
+        "The listing is stale. Refresh Timber before continuing.",
+      );
+    }
+  };
+
+  const post = async (path: string, body: Record<string, unknown>) => {
+    check();
+    const response = await context.rest<unknown>(path, {
+      method: "POST",
+      body,
+    });
+    check();
+    return response;
+  };
+
+  const refresh = async () => {
+    assertScope(scope);
+    const refreshed = await listing.refetch();
+    if (refreshed.error) throw refreshed.error;
+    assertScope(scope);
+  };
+
+  const operation = useMutation({
+    mutationKey: ["hermes-timber", scope, "operation"],
+    mutationFn: async (run: () => Promise<void>) => {
+      check();
+      await run();
+    },
+    onMutate: () => {
+      setError(null);
+      setNotice([]);
+    },
+    onError: (failure) => {
+      if (current()) {
+        setError(message(failure));
+        setPreview(null);
+      }
+    },
+  });
+  const busy = operation.isPending;
+  const disabled = !ready || busy || error !== null || listing.isFetching;
+  const run = (action: () => Promise<void>) => operation.mutate(action);
+  const warnings = (response: unknown) => {
+    const result = responseWarnings(response);
+    if (current()) setNotice(result.length ? result : ["Completed."]);
+  };
+
+  async function open(worktree: Worktree) {
+    check();
+    const project = data?.projects[worktree.repo];
+    if (!project)
+      throw new Error(
+        "No Hermes Project exists for this repository. Select Sync Projects first.",
+      );
+    const selected = await host.request<unknown>("projects.set_active", {
+      id: project,
+      profile: host.state.profile.get(),
+    });
+    check();
+    if (!record(selected) || selected.active_id !== project)
+      throw new Error("Hermes did not activate the repository Project.");
+    const created = await host.request<unknown>("session.create", {
+      cwd: worktree.path,
+      title: worktree.name,
+      source: "desktop",
+      profile: host.state.profile.get(),
+    });
+    check();
+    if (
+      !record(created) ||
+      typeof created.stored_session_id !== "string" ||
+      !created.stored_session_id ||
+      !record(created.info) ||
+      created.info.cwd !== worktree.path
+    ) {
+      throw new Error(
+        "Hermes did not confirm the requested working directory. The chat was not opened.",
+      );
+    }
+    await host.openSession(created.stored_session_id, {
+      profile: host.state.profile.get(),
+      awaitHydration: true,
+      keepAllProfilesScope: true,
+    });
+    check();
+    setRecent((previous) => ({ ...previous, [worktree.path]: Date.now() }));
+    setNotice([`Opened ${worktree.name}@${worktree.repo} in Hermes.`]);
+  }
+
+  async function prepareRemove(worktree: Worktree) {
+    if (!safeToRemove(worktree))
+      throw new Error(
+        "Only clean, merged worktrees without status errors can be removed.",
+      );
+    const result = parsePreview(
+      await post("/remove/preview", {
+        repo: worktree.repo,
+        name: worktree.name,
+      }),
+    );
+    if (
+      !safeToRemove(result.worktree) ||
+      result.worktree.repo !== worktree.repo ||
+      result.worktree.name !== worktree.name ||
+      result.worktree.path !== worktree.path
+    ) {
+      throw new Error(
+        "The worktree changed. Refresh Timber before requesting another preview.",
+      );
+    }
+    if (current()) setPreview(result);
+  }
+
+  function create(event: FormEvent) {
+    event.preventDefault();
+    run(async () => {
+      const chosen = createRepo || data?.repositories[0];
+      if (!chosen) throw new Error("Select a repository first.");
+      const response = await post("/create", {
+        repo: chosen,
+        name: name.trim(),
+        upstream: upstream.trim(),
+      });
+      if (!record(response) || !isWorktree(response.worktree))
+        throw new Error(
+          "The Timber backend returned an invalid create response.",
+        );
+      warnings(response);
+      if (current()) {
+        setCreating(false);
+        setName("");
+        setUpstream("");
+      }
+      await refresh();
+    });
+  }
+
+  const filtered = (data?.worktrees ?? [])
+    .filter(
+      (worktree) =>
+        (!repo || worktree.repo === repo) &&
+        fuzzyMatch(
+          search,
+          `${worktree.name}@${worktree.repo} ${worktree.path} ${worktree.upstream ?? ""}`,
+        ) &&
+        (status === "all" ||
+          (status === "safe" && safeToRemove(worktree)) ||
+          (status === "dirty" && !worktree.clean) ||
+          (status === "error" && Boolean(worktree.statusError))),
+    )
+    .sort((left, right) => {
+      if (sort === "recent") {
+        const difference = (recent[right.path] ?? 0) - (recent[left.path] ?? 0);
+        if (difference) return difference;
+        // Timber's listing order is its recency order for worktrees not opened here.
+        return 0;
+      }
+      return (
+        (sort === "repo"
+          ? left.repo.localeCompare(right.repo)
+          : left.name.localeCompare(right.name)) ||
+        left.repo.localeCompare(right.repo) ||
+        left.name.localeCompare(right.name)
+      );
+    });
+  const previewCurrent =
+    preview &&
+    data?.worktrees.some(
+      (worktree) =>
+        worktree.repo === preview.worktree.repo &&
+        worktree.name === preview.worktree.name &&
+        worktree.path === preview.worktree.path &&
+        worktree.commit === preview.worktree.commit &&
+        safeToRemove(worktree),
+    );
+
+  return (
+    <section
+      aria-label="Timber worktrees"
+      style={{
+        ...stack,
+        padding: 12,
+        height: "100%",
+        overflow: "auto",
+        color: "var(--ui-text-primary)",
+        fontSize: 13,
+      }}
+    >
+      <header style={stack}>
+        <div style={{ ...row, justifyContent: "space-between" }}>
+          <strong>Timber</strong>
+          <Badge variant={ready ? "muted" : "warn"}>
+            {online ? (listing.isError ? "Stale" : "Connected") : "Offline"}
+          </Badge>
+        </div>
+        {data && (
+          <div style={muted}>
+            {data.host} · {host.state.profile.get()}
+            <br />
+            {data.hermes_home}
+          </div>
+        )}
+        <div style={row}>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            disabled={disabled || !data?.repositories.length}
+            onClick={() => {
+              setPreview(null);
+              setCreating((value) => !value);
+            }}
+          >
+            New worktree
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={disabled}
+            onClick={() =>
+              run(async () => {
+                warnings(await post("/sync", {}));
+                await refresh();
+              })
+            }
+          >
+            Sync Projects
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={!online || busy || listing.isFetching}
+            onClick={() => {
+              setError(null);
+              void refresh().catch((failure: unknown) => {
+                if (current()) setError(message(failure));
+              });
+            }}
+          >
+            Refresh
+          </Button>
+        </div>
+      </header>
+      {!online && (
+        <p role="status">
+          Gateway offline. Cached results are stale. Actions are disabled.
+        </p>
+      )}
+      {listing.isPending && online && <p role="status">Loading worktrees…</p>}
+      {listing.isError && (
+        <p role="alert">
+          {data ? "Cached results are stale. " : "Cannot load Timber. "}
+          {message(listing.error)} Actions are disabled until a successful
+          refresh.
+        </p>
+      )}
+      {error && <p role="alert">{error}</p>}
+      {notice.length > 0 && (
+        <div role="status">
+          {notice.map((text, index) => (
+            <p key={index}>{text}</p>
+          ))}
+        </div>
+      )}
+      {data?.warnings.length ? (
+        <div aria-label="Backend warnings">
+          {data.warnings.map((text, index) => (
+            <p key={index} style={muted}>
+              {text}
+            </p>
+          ))}
+        </div>
+      ) : null}
+      {creating && (
+        <form
+          aria-label="Create worktree"
+          onSubmit={create}
+          style={{
+            ...stack,
+            border: "1px solid var(--ui-stroke-secondary)",
+            padding: 10,
+            borderRadius: 4,
+          }}
+        >
+          <label style={stack}>
+            Repository
+            <select
+              aria-label="Create repository"
+              style={selectStyle}
+              value={createRepo || data?.repositories[0] || ""}
+              disabled={disabled}
+              onChange={(event) => setCreateRepo(event.target.value)}
+            >
+              {data?.repositories.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label style={stack}>
+            Branch name (optional)
+            <Input
+              value={name}
+              disabled={disabled}
+              placeholder="Let Timber choose"
+              onChange={(event) => setName(event.target.value)}
+            />
+          </label>
+          <label style={stack}>
+            Upstream (optional)
+            <Input
+              value={upstream}
+              disabled={disabled}
+              placeholder="Repository default"
+              onChange={(event) => setUpstream(event.target.value)}
+            />
+          </label>
+          <div style={row}>
+            <Button type="submit" size="sm" disabled={disabled}>
+              Create worktree
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => setCreating(false)}
+            >
+              Cancel
+            </Button>
+          </div>
+        </form>
+      )}
+      <label style={stack}>
+        Find worktrees
+        <Input
+          type="search"
+          value={search}
+          placeholder="name@repo or fuzzy search"
+          onChange={(event) => setSearch(event.target.value)}
+        />
+      </label>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
+          gap: 8,
+        }}
+      >
+        <label style={stack}>
+          Repository
+          <select
+            style={selectStyle}
+            value={repo}
+            onChange={(event) => setRepo(event.target.value)}
+          >
+            <option value="">All repositories</option>
+            {data?.repositories.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label style={stack}>
+          Status
+          <select
+            style={selectStyle}
+            value={status}
+            onChange={(event) => setStatus(event.target.value)}
+          >
+            <option value="all">All statuses</option>
+            <option value="safe">Safe to remove</option>
+            <option value="dirty">Dirty</option>
+            <option value="error">Status error</option>
+          </select>
+        </label>
+        <label style={stack}>
+          Sort
+          <select
+            style={selectStyle}
+            value={sort}
+            onChange={(event) => setSort(event.target.value)}
+          >
+            <option value="recent">Recent</option>
+            <option value="repo">Repository</option>
+            <option value="name">Name</option>
+          </select>
+        </label>
+      </div>
+      {preview && (
+        <section
+          role="dialog"
+          aria-modal="false"
+          aria-label="Confirm worktree removal"
+          style={{
+            ...stack,
+            padding: 10,
+            border: "1px solid var(--ui-stroke-secondary)",
+            borderRadius: 4,
+          }}
+        >
+          <strong>
+            Remove {preview.worktree.name}@{preview.worktree.repo}?
+          </strong>
+          <div style={muted}>Delete directory: {preview.worktree.path}</div>
+          <div>Delete branch: {preview.branch}</div>
+          <p>{preview.warning}</p>
+          {!previewCurrent && (
+            <p role="alert">
+              The worktree changed. Cancel and request a new preview.
+            </p>
+          )}
+          <div style={row}>
+            <Button
+              type="button"
+              size="sm"
+              variant="destructive"
+              disabled={disabled || !previewCurrent}
+              onClick={() =>
+                run(async () => {
+                  const result = await post("/remove", {
+                    token: preview.token,
+                  });
+                  if (!record(result) || !result.removed)
+                    throw new Error("The backend did not confirm removal.");
+                  warnings(result);
+                  if (current()) setPreview(null);
+                  await refresh();
+                })
+              }
+            >
+              Remove worktree and branch
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => setPreview(null)}
+            >
+              Cancel removal
+            </Button>
+          </div>
+        </section>
+      )}
+      <div aria-live="polite" style={muted}>
+        {data ? `${filtered.length} of ${data.worktrees.length} worktrees` : ""}
+        {busy ? " · Working…" : ""}
+      </div>
+      {data && filtered.length === 0 && (
+        <p>
+          {data.worktrees.length
+            ? "No matching worktrees."
+            : "No worktrees yet. Create one from a repository above."}
+        </p>
+      )}
+      <ul
+        aria-label="Worktrees"
+        style={{ ...stack, listStyle: "none", margin: 0, padding: 0 }}
+      >
+        {filtered.map((worktree) => (
+          <li
+            key={JSON.stringify([worktree.repo, worktree.name])}
+            style={{
+              ...stack,
+              borderTop: "1px solid var(--ui-stroke-secondary)",
+              paddingTop: 10,
+            }}
+          >
+            <strong style={{ overflowWrap: "anywhere" }}>
+              {worktree.name}@{worktree.repo}
+            </strong>
+            <div style={muted}>{worktree.path}</div>
+            <div style={row}>
+              <Badge variant={worktree.clean ? "muted" : "warn"}>
+                {worktree.clean ? "Clean" : "Dirty"}
+              </Badge>
+              {worktree.merged && <Badge variant="success">Merged</Badge>}
+              {worktree.statusError && (
+                <Badge variant="destructive">Status error</Badge>
+              )}
+              <span style={muted}>
+                ↑{worktree.ahead ?? 0} ↓{worktree.behind ?? 0}
+              </span>
+              {worktree.todoTotal !== undefined && (
+                <span style={muted}>
+                  TODO {worktree.todoDone ?? 0}/{worktree.todoTotal}
+                </span>
+              )}
+              {worktree.pullRequest && (
+                <span style={muted}>PR {worktree.pullRequest}</span>
+              )}
+            </div>
+            {worktree.upstream && (
+              <div style={muted}>Upstream: {worktree.upstream}</div>
+            )}
+            {worktree.statusError && (
+              <p role="status" style={muted}>
+                Git status could not be read. Removal is disabled.
+              </p>
+            )}
+            <div style={row}>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={disabled}
+                aria-label={`Open ${worktree.name}@${worktree.repo} in Hermes`}
+                onClick={() => run(() => open(worktree))}
+              >
+                Open in Hermes
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={disabled || !safeToRemove(worktree)}
+                title={
+                  safeToRemove(worktree)
+                    ? "Preview removal"
+                    : "Requires clean, merged status without errors"
+                }
+                aria-label={`Remove ${worktree.name}@${worktree.repo}`}
+                onClick={() => run(() => prepareRemove(worktree))}
+              >
+                Remove…
+              </Button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
