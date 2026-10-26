@@ -202,6 +202,16 @@ function ScopedPanel({
       keepAllProfilesScope: true,
     });
     check();
+    // Empty local drafts resume without info.cwd. Reaffirm the workspace after
+    // hydration so Hermes emits a session.info update for Files and Review.
+    const moved = await host.request<unknown>("session.workspace.move", {
+      session_key: created.stored_session_id,
+      cwd: worktree.path,
+      profile: host.state.profile.get(),
+    });
+    check();
+    if (!record(moved) || moved.cwd !== worktree.path)
+      throw new Error("Hermes did not confirm the opened chat's workspace.");
     setRecent((previous) => ({ ...previous, [worktree.path]: Date.now() }));
     setNotice([`Opened ${worktree.name}@${worktree.repo} in Hermes.`]);
   }

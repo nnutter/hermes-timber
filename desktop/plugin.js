@@ -272,6 +272,14 @@ function ScopedPanel({
       keepAllProfilesScope: true
     });
     check();
+    const moved = await host2.request("session.workspace.move", {
+      session_key: created.stored_session_id,
+      cwd: worktree.path,
+      profile: host2.state.profile.get()
+    });
+    check();
+    if (!record(moved) || moved.cwd !== worktree.path)
+      throw new Error("Hermes did not confirm the opened chat's workspace.");
     setRecent((previous) => ({ ...previous, [worktree.path]: Date.now() }));
     setNotice([`Opened ${worktree.name}@${worktree.repo} in Hermes.`]);
   }

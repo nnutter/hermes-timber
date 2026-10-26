@@ -408,7 +408,8 @@ describe("Timber desktop panel", () => {
       .mockResolvedValueOnce({
         stored_session_id: "stored-new",
         info: { cwd: clean.path },
-      });
+      })
+      .mockResolvedValueOnce({ cwd: clean.path });
     host.openSession.mockResolvedValue();
     mount();
     await loaded();
@@ -424,6 +425,11 @@ describe("Timber desktop panel", () => {
       cwd: clean.path,
       title: "done",
       source: "desktop",
+      profile: "default",
+    });
+    expect(host.request).toHaveBeenNthCalledWith(3, "session.workspace.move", {
+      session_key: "stored-new",
+      cwd: clean.path,
       profile: "default",
     });
     expect(host.openSession).toHaveBeenCalledWith("stored-new", {
