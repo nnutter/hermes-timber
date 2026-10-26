@@ -37,6 +37,7 @@ def check(_context: Context) -> None:
 	run("uv", "run", "ruff", "format", "--check", ".")
 	run("uv", "run", "ty", "check")
 	run("mise", "exec", "--", "npm", "run", "check")
+	run("mise", "exec", "--", "shellcheck", "-x", "scripts/sync-desktop")
 
 
 @task

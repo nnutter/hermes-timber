@@ -31,6 +31,43 @@ The generated JavaScript is committed because the Hermes plugin loader does not 
 The backend tests require a Hermes checkout at `~/.hermes/hermes-agent`, or a path supplied through `HERMES_SOURCE`.
 They use real Timber and Git with isolated homes and local origins.
 
+## Sync the Desktop UI from frame
+
+Run `scripts/sync-desktop` on the Mac, not on the gateway.
+It requires Bash 3.2 or newer and a working SSH login to `frame`.
+Verify that `ssh frame hostname` reports `frame` before the first sync.
+The script uses batch-mode SSH and never bypasses host-key verification or prompts for credentials.
+
+Install the script once on the Mac:
+
+```sh
+mkdir -p ~/.local/bin
+scp frame:/home/nnutter/src/github.com/nnutter/hermes-timber/scripts/sync-desktop ~/.local/bin/sync-hermes-timber
+chmod +x ~/.local/bin/sync-hermes-timber
+```
+
+After changes on frame, run:
+
+```sh
+~/.local/bin/sync-hermes-timber
+```
+
+The script checks TypeScript and builds on frame, then atomically replaces the Mac's `~/.hermes/desktop-plugins/hermes-timber/plugin.js`.
+Build messages stay separate from the transferred artifact.
+An unchanged artifact does not touch the installed file.
+Failed builds, failed transfers, and empty downloads leave the installed plugin intact.
+The script refuses to replace a development symlink.
+Hermes watches the file and should hot-reload it automatically.
+If the running Desktop build does not react, use **Reload desktop plugins** from its command palette.
+The script does not change the backend, enable settings, or authentication state.
+
+Configuration uses environment variables:
+
+- `TIMBER_SYNC_HOST` selects the SSH destination, default `frame`.
+- `TIMBER_SYNC_REPO` selects the absolute source checkout path on frame.
+- `TIMBER_DESKTOP_PLUGIN_DIR` selects the absolute plugin directory on the Mac if Desktop uses a different local root.
+- `TIMBER_SYNC_BUILD=0` copies the existing compiled artifact without a type check or build.
+
 ## Install on the correct machines
 
 Build the plugin before installation.

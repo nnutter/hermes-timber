@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# Run on the Desktop computer. Requires Bash 3.2+ and an existing SSH login to frame.
+set -euo pipefail
+
+readonly DEFAULT_REPO=/home/nnutter/src/github.com/nnutter/hermes-timber
+temp_file=''
+
+cleanup() {
+  if [[ -n "$temp_file" ]]; then
+    rm -f -- "$temp_file"
+  fi
+}
+
+shell_quote() {
+  local value=$1
+  printf "'%s'" "${value//\'/\'\\\'\'}"
+}
+
+main() {
+  if (( $# != 0 )); then
+    printf 'Usage: sync-desktop (configuration is through environment variables)\n' >&2
+    return 2
+  fi
+
+  local host=${TIMBER_SYNC_HOST:-frame}
+  local repo=${TIMBER_SYNC_REPO:-$DEFAULT_REPO}
+  local destination=${TIMBER_DESKTOP_PLUGIN_DIR:-$HOME/.hermes/desktop-plugins/hermes-timber}
+  local build=${TIMBER_SYNC_BUILD:-1}
+  local target="$destination/plugin.js"
+  local remote_command
+
+  if [[ "$host" == -* || "$repo" != /* || "$destination" != /* ]]; then
+    printf 'Use an SSH host name and absolute repository/destination paths.\n' >&2
+    return 2
+  fi
+  if [[ "$build" != 0 && "$build" != 1 ]]; then
+    printf 'TIMBER_SYNC_BUILD must be 0 or 1.\n' >&2
+    return 2
+  fi
+  if [[ -L "$destination" || -L "$target" ]]; then
+    printf 'Refusing to replace a symlink: %s\n' "$target" >&2
+    return 2
+  fi
+  if [[ -e "$target" && ! -f "$target" ]]; then
+    printf 'Destination is not a regular file: %s\n' "$target" >&2
+    return 2
+  fi
+  if ! command -v ssh >/dev/null 2>&1; then
+    printf 'OpenSSH is required.\n' >&2
+    return 1
+  fi
+
+  mkdir -p -- "$destination"
+  temp_file=$(mktemp "$destination/.plugin.js.XXXXXXXX")
+  trap cleanup EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+
+  remote_command="set -eu; PATH=\"\$HOME/.local/bin:\$PATH\"; export PATH; cd $(shell_quote "$repo"); "
+  if [[ "$build" == 1 ]]; then
+    remote_command+='mise exec -- npm exec --no -- tsc --noEmit >&2; uv run invoke build >&2; '
+  fi
+  remote_command+='cat desktop/plugin.js'
+
+  printf 'Fetching %s:%s/desktop/plugin.js\n' "$host" "$repo" >&2
+  if ! ssh -T -o BatchMode=yes -o ConnectTimeout=10 -- "$host" "$remote_command" > "$temp_file"; then
+    printf 'Sync failed; the installed plugin was not changed.\n' >&2
+    printf 'First verify your SSH login with: ssh %s hostname\n' "$host" >&2
+    return 1
+  fi
+  if [[ ! -s "$temp_file" ]]; then
+    printf 'Refusing an empty plugin; the installed plugin was not changed.\n' >&2
+    return 1
+  fi
+  if [[ -f "$target" ]] && cmp -s -- "$temp_file" "$target"; then
+    printf 'Plugin unchanged: %s\n' "$target"
+    return 0
+  fi
+
+  chmod 644 "$temp_file"
+  mv -f -- "$temp_file" "$target"
+  temp_file=''
+  printf 'Updated %s\n' "$target"
+  printf 'Hermes watches this file and should hot-reload it automatically.\n'
+  printf 'If needed, run Reload desktop plugins from the command palette.\n'
+}
+
+main "$@"
