@@ -234,6 +234,10 @@ function ScopedPanel({
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("recent");
   const [creating, setCreating] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [source, setSource] = useState("");
+  const [repoName, setRepoName] = useState("");
+  const [alias, setAlias] = useState("");
   const [createRepo, setCreateRepo] = useState("");
   const [name, setName] = useState("");
   const [upstream, setUpstream] = useState("");
@@ -395,6 +399,29 @@ function ScopedPanel({
       await refresh();
     });
   }
+  function addRepository(event) {
+    event.preventDefault();
+    disarm();
+    run(async () => {
+      const response = await post("/repositories", {
+        source,
+        name: repoName,
+        alias
+      });
+      if (!record(response) || typeof response.repository !== "string" || !response.repository)
+        throw new Error(
+          "The backend did not confirm repository addition. Refresh before retrying."
+        );
+      warnings(response);
+      if (current()) {
+        setAdding(false);
+        setSource("");
+        setRepoName("");
+        setAlias("");
+      }
+      await refresh();
+    });
+  }
   const filtered = (data?.worktrees ?? []).filter((worktree) => {
     const needle = search.trim().toLocaleLowerCase();
     const selector = `${worktree.name}@${worktree.repo}`;
@@ -490,6 +517,20 @@ function ScopedPanel({
               {
                 type: "button",
                 size: "sm",
+                variant: "secondary",
+                disabled,
+                onClick: () => {
+                  disarm();
+                  setAdding((value) => !value);
+                },
+                children: "Add repository"
+              }
+            ),
+            /* @__PURE__ */ jsx(
+              Button,
+              {
+                type: "button",
+                size: "sm",
                 variant: "outline",
                 disabled,
                 onClick: () => {
@@ -515,6 +556,71 @@ function ScopedPanel({
         error && !authenticationRequired && /* @__PURE__ */ jsx("p", { role: "alert", children: error }),
         notice.length > 0 && /* @__PURE__ */ jsx("div", { role: "status", children: notice.map((text, index) => /* @__PURE__ */ jsx("p", { children: text }, index)) }),
         data?.warnings.length ? /* @__PURE__ */ jsx("div", { "aria-label": "Backend warnings", children: data.warnings.map((text, index) => /* @__PURE__ */ jsx("p", { style: muted, children: text }, index)) }) : null,
+        adding && /* @__PURE__ */ jsxs(
+          "form",
+          {
+            "aria-label": "Add repository",
+            onSubmit: addRepository,
+            style: stack,
+            children: [
+              /* @__PURE__ */ jsxs("label", { style: stack, children: [
+                "Repository URL or path",
+                /* @__PURE__ */ jsx(
+                  Input,
+                  {
+                    value: source,
+                    disabled,
+                    onChange: (event) => setSource(event.target.value)
+                  }
+                )
+              ] }),
+              /* @__PURE__ */ jsxs("label", { style: stack, children: [
+                "Repository name (optional)",
+                /* @__PURE__ */ jsx(
+                  Input,
+                  {
+                    value: repoName,
+                    disabled,
+                    onChange: (event) => setRepoName(event.target.value)
+                  }
+                )
+              ] }),
+              /* @__PURE__ */ jsxs("label", { style: stack, children: [
+                "Alias (optional)",
+                /* @__PURE__ */ jsx(
+                  Input,
+                  {
+                    value: alias,
+                    disabled,
+                    onChange: (event) => setAlias(event.target.value)
+                  }
+                )
+              ] }),
+              /* @__PURE__ */ jsxs("div", { style: row, children: [
+                /* @__PURE__ */ jsx(
+                  Button,
+                  {
+                    type: "submit",
+                    size: "sm",
+                    disabled: disabled || !source.trim(),
+                    children: "Add repo"
+                  }
+                ),
+                /* @__PURE__ */ jsx(
+                  Button,
+                  {
+                    type: "button",
+                    size: "sm",
+                    variant: "ghost",
+                    disabled: busy,
+                    onClick: () => setAdding(false),
+                    children: "Cancel"
+                  }
+                )
+              ] })
+            ]
+          }
+        ),
         creating && /* @__PURE__ */ jsxs(
           "form",
           {

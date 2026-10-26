@@ -125,6 +125,40 @@ afterEach(() => {
 });
 
 describe("Timber desktop panel", () => {
+  it("adds a repository from an empty list and refreshes", async () => {
+    const empty = { ...state, repositories: [], worktrees: [], projects: {} };
+    rest.mockImplementation(async (path) =>
+      path === "/repositories"
+        ? { repository: "new/repo", warnings: [] }
+        : empty,
+    );
+    mount();
+    const user = userEvent.setup();
+    await user.click(
+      await screen.findByRole("button", { name: "Add repository" }),
+    );
+    await user.type(
+      screen.getByLabelText("Repository URL or path"),
+      "/tmp/origin",
+    );
+    await user.type(
+      screen.getByLabelText("Repository name (optional)"),
+      "new/repo",
+    );
+    await user.type(screen.getByLabelText("Alias (optional)"), "short");
+    await user.click(screen.getByRole("button", { name: "Add repo" }));
+    await waitFor(() =>
+      expect(rest).toHaveBeenCalledWith("/repositories", {
+        method: "POST",
+        body: { source: "/tmp/origin", name: "new/repo", alias: "short" },
+      }),
+    );
+    await screen.findByText("Completed.");
+    expect(
+      rest.mock.calls.filter(([path]) => path === "/state").length,
+    ).toBeGreaterThan(1);
+  });
+
   it.each([
     [true, true, "Merged", "success"],
     [false, true, "Merged", "warn"],

@@ -95,6 +95,8 @@ It excludes Node modules, the Python environment, development tools, and tests.
 
 ## Use the panel
 
+Use **Add repository** to register a gateway-local path or remote URL; credentials in URLs are rejected.
+Adding a repository does not sync Projects. Select **Sync Projects** separately.
 Create worktrees from a registered repository.
 Leave the branch name empty to let Timber choose a name.
 The plugin uses `--no-herdr` and does not enable mise trust or repository hooks.
@@ -119,6 +121,10 @@ Sync preserves an existing checkout's folder when Timber omits the checkout, inc
 A confirmation applies to the exact previewed worktree state and expires.
 The backend checks the state again before removal and never uses `--force`.
 Do not use cleanup as a backup for local notes or commits.
+
+## Repository HTTP contract
+
+`POST /repositories` accepts `{"source": "URL or path", "name": "", "alias": ""}`; name and alias are optional. It returns `{"repository": "registered name", "warnings": []}` only after a clean command and listing confirm one new repository. On failure or an uncertain outcome it returns an error; refresh and inspect Timber before retrying. No repository is removed automatically.
 
 ## Explore the code
 

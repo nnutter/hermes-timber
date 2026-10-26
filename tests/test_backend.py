@@ -484,3 +484,52 @@ def test_remove_failure_preserves_checkout_and_membership(
 		project = projects_db.get_project(db, pid)
 		assert project is not None and [folder.path for folder in project.folders] == [wt.path]
 	assert sandbox.client.post("/remove", json={"token": token}).status_code == 409
+
+
+def test_add_repository_real_timber(sandbox: Sandbox) -> None:
+	response = sandbox.client.post(
+		"/repositories",
+		json={"source": str(sandbox.root / "origin"), "name": "other/repo", "alias": "short"},
+	)
+	assert response.status_code == 200, response.text
+	assert response.json()["repository"] == "other/repo"
+	assert "other/repo" in sandbox.state().repositories
+	assert sandbox.state().projects == {}
+
+
+@pytest.mark.parametrize("source", ["-bad", "bad\npath", "https://user:secret@example.com/repo"])
+def test_add_repository_rejects_unsafe_source(sandbox: Sandbox, source: str) -> None:
+	response = sandbox.client.post("/repositories", json={"source": source})
+	assert response.status_code == 422
+	assert "secret" not in response.text
+	assert sandbox.state().repositories == ["example/demo"]
+
+
+def test_add_partial_failure_requires_inspection(
+	sandbox: Sandbox, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	real_run = api.run
+
+	def failed_after_add(
+		argv: list[str], cwd: Path | None = None
+	) -> subprocess.CompletedProcess[str]:
+		result = real_run(argv, cwd)
+		if argv[:3] == ["timber", "repo", "add"]:
+			return subprocess.CompletedProcess(argv, 1, result.stdout, "failed after registration")
+		return result
+
+	monkeypatch.setattr(api, "run", failed_after_add)
+	response = sandbox.client.post(
+		"/repositories", json={"source": str(sandbox.root / "origin"), "name": "partial/repo"}
+	)
+	assert response.status_code == 502
+	assert "refresh" in response.text
+	assert "partial/repo" in sandbox.state().repositories
+
+
+def test_add_repository_rejects_unknown_field(sandbox: Sandbox) -> None:
+	response = sandbox.client.post(
+		"/repositories", json={"source": str(sandbox.root / "origin"), "force": True}
+	)
+	assert response.status_code == 422
+	assert sandbox.state().repositories == ["example/demo"]

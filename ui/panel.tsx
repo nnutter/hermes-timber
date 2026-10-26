@@ -139,6 +139,10 @@ function ScopedPanel({
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("recent");
   const [creating, setCreating] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [source, setSource] = useState("");
+  const [repoName, setRepoName] = useState("");
+  const [alias, setAlias] = useState("");
   const [createRepo, setCreateRepo] = useState("");
   const [name, setName] = useState("");
   const [upstream, setUpstream] = useState("");
@@ -332,6 +336,34 @@ function ScopedPanel({
     });
   }
 
+  function addRepository(event: FormEvent) {
+    event.preventDefault();
+    disarm();
+    run(async () => {
+      const response = await post("/repositories", {
+        source,
+        name: repoName,
+        alias,
+      });
+      if (
+        !record(response) ||
+        typeof response.repository !== "string" ||
+        !response.repository
+      )
+        throw new Error(
+          "The backend did not confirm repository addition. Refresh before retrying.",
+        );
+      warnings(response);
+      if (current()) {
+        setAdding(false);
+        setSource("");
+        setRepoName("");
+        setAlias("");
+      }
+      await refresh();
+    });
+  }
+
   const filtered = (data?.worktrees ?? [])
     .filter((worktree) => {
       const needle = search.trim().toLocaleLowerCase();
@@ -453,6 +485,18 @@ function ScopedPanel({
           <Button
             type="button"
             size="sm"
+            variant="secondary"
+            disabled={disabled}
+            onClick={() => {
+              disarm();
+              setAdding((value) => !value);
+            }}
+          >
+            Add repository
+          </Button>
+          <Button
+            type="button"
+            size="sm"
             variant="outline"
             disabled={disabled}
             onClick={() => {
@@ -504,6 +548,56 @@ function ScopedPanel({
           ))}
         </div>
       ) : null}
+      {adding && (
+        <form
+          aria-label="Add repository"
+          onSubmit={addRepository}
+          style={stack}
+        >
+          <label style={stack}>
+            Repository URL or path
+            <Input
+              value={source}
+              disabled={disabled}
+              onChange={(event) => setSource(event.target.value)}
+            />
+          </label>
+          <label style={stack}>
+            Repository name (optional)
+            <Input
+              value={repoName}
+              disabled={disabled}
+              onChange={(event) => setRepoName(event.target.value)}
+            />
+          </label>
+          <label style={stack}>
+            Alias (optional)
+            <Input
+              value={alias}
+              disabled={disabled}
+              onChange={(event) => setAlias(event.target.value)}
+            />
+          </label>
+          <div style={row}>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={disabled || !source.trim()}
+            >
+              Add repo
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => setAdding(false)}
+            >
+              Cancel
+            </Button>
+          </div>
+        </form>
+      )}
       {creating && (
         <form
           aria-label="Create worktree"

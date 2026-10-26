@@ -16,6 +16,7 @@ import time
 from collections.abc import Generator
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
@@ -60,6 +61,17 @@ class Create(Empty):
 	repo: str
 	name: str = ""
 	upstream: str = ""
+
+
+class RepositoryAdd(Empty):
+	source: str
+	name: str = ""
+	alias: str = ""
+
+
+class RepositoryAdded(BaseModel):
+	repository: str
+	warnings: list[str]
 
 
 class Target(Empty):
@@ -416,6 +428,60 @@ def sync(_body: Empty) -> State:
 		items = listing()
 		mapping, warnings = reconcile(db, items)
 		return state(items, mapping, warnings)
+
+
+@router.post("/repositories")
+def add_repository(body: RepositoryAdd) -> RepositoryAdded:
+	for value in (body.source, body.name, body.alias):
+		if value.startswith("-") or any(ord(c) < 32 or ord(c) == 127 for c in value):
+			raise HTTPException(422, "Invalid repository input")
+	if not body.source or body.source != body.source.strip():
+		raise HTTPException(422, "Invalid repository source")
+	try:
+		parsed = urlsplit(body.source)
+		if parsed.netloc and (parsed.username is not None or parsed.password is not None):
+			raise HTTPException(422, "Credentials in repository URLs are not allowed")
+	except ValueError as exc:
+		raise HTTPException(422, "Invalid repository source") from exc
+	with locked():
+		before = listing()
+		if before.warnings:
+			raise HTTPException(502, "Listing reported diagnostics; repository addition refused")
+		argv = ["timber", "repo", "add", body.source]
+		if body.name:
+			argv.extend(["--name", body.name])
+		if body.alias:
+			argv.extend(["--alias", body.alias])
+		failed = False
+		stderr = ""
+		try:
+			result = run(argv)
+			stderr = result.stderr
+			failed = result.returncode != 0
+		except HTTPException:
+			failed = True
+		try:
+			after = listing()
+		except HTTPException as exc:
+			raise HTTPException(
+				502, "Repository addition outcome unknown; refresh before retrying"
+			) from exc
+		added = set(after.repositories) - set(before.repositories)
+		if failed or after.warnings or len(added) != 1 or (body.name and body.name not in added):
+			raise HTTPException(
+				502,
+				"Repository addition not confirmed cleanly; refresh and inspect before retrying",
+			)
+		diagnostics = re.sub(r"\x1b\[[0-9;]*m", "", stderr)
+		warnings = (
+			["Timber reported diagnostics; inspect the repository before continuing."]
+			if any(
+				line.strip() and not line.strip().startswith("added repository ")
+				for line in diagnostics.splitlines()
+			)
+			else []
+		)
+		return RepositoryAdded(repository=added.pop(), warnings=warnings)
 
 
 @router.post("/create")
