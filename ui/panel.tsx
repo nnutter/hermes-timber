@@ -3,6 +3,7 @@ import type { CSSProperties, FormEvent } from "react";
 import {
   Badge,
   Button,
+  Codicon,
   host,
   Input,
   useMutation,
@@ -56,7 +57,7 @@ export function TimberPanel({ context }: { context: PluginContext }) {
   // A different route gets a fresh local state, including destructive consent.
   return (
     <ScopedPanel
-      key={scope.key}
+      key={JSON.stringify([scope.key, scope.online])}
       context={context}
       scope={scope.key}
       online={scope.online}
@@ -82,6 +83,26 @@ function ScopedPanel({
     };
   }, []);
   const current = () => alive.current && scopeKey() === scope;
+  const consentVersion = useRef(0);
+  const consentTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const consent = useRef<RemovePreview | null>(null);
+  const consentSnapshot = useRef("");
+  const consentDeadline = useRef(0);
+  const actionLocked = useRef(false);
+  const disarm = () => {
+    consentVersion.current++;
+    consent.current = null;
+    if (consentTimer.current !== null) clearTimeout(consentTimer.current);
+    consentTimer.current = null;
+    setPreview(null);
+  };
+  useEffect(
+    () => () => {
+      consentVersion.current++;
+      if (consentTimer.current !== null) clearTimeout(consentTimer.current);
+    },
+    [],
+  );
   const queryKey = ["hermes-timber", scope, "state"] as const;
   const consecutiveFailures = useRef(0);
   const [authenticationRequired, setAuthenticationRequired] = useState(() =>
@@ -95,6 +116,7 @@ function ScopedPanel({
     queryKey,
     queryFn: async () => {
       assertScope(scope);
+      disarm();
       try {
         const result = parseState(await context.rest<unknown>("/state"));
         assertScope(scope);
@@ -182,7 +204,15 @@ function ScopedPanel({
   });
   const busy = operation.isPending;
   const disabled = !ready || busy || error !== null || listing.isFetching;
-  const run = (action: () => Promise<void>) => operation.mutate(action);
+  const run = (action: () => Promise<void>) => {
+    if (actionLocked.current) return;
+    actionLocked.current = true;
+    operation.mutate(action, {
+      onSettled: () => {
+        actionLocked.current = false;
+      },
+    });
+  };
   const warnings = (response: unknown) => {
     const result = responseWarnings(response);
     if (current()) setNotice(result.length ? result : ["Completed."]);
@@ -245,6 +275,8 @@ function ScopedPanel({
       throw new Error(
         "Only clean, merged worktrees without status errors can be removed.",
       );
+    const version = consentVersion.current;
+    const snapshot = JSON.stringify(worktree);
     const result = parsePreview(
       await post("/remove/preview", {
         repo: worktree.repo,
@@ -261,7 +293,22 @@ function ScopedPanel({
         "The worktree changed. Refresh Timber before requesting another preview.",
       );
     }
-    if (current()) setPreview(result);
+    const latest = client
+      .getQueryData<typeof data>(queryKey)
+      ?.worktrees.find(
+        (item) => item.repo === worktree.repo && item.name === worktree.name,
+      );
+    if (
+      !current() ||
+      version !== consentVersion.current ||
+      JSON.stringify(latest) !== snapshot
+    )
+      return;
+    consentSnapshot.current = snapshot;
+    consentDeadline.current = Date.now() + 5000;
+    consent.current = result;
+    setPreview(result);
+    consentTimer.current = setTimeout(disarm, 5000);
   }
 
   function create(event: FormEvent) {
@@ -366,7 +413,7 @@ function ScopedPanel({
             variant="secondary"
             disabled={disabled || !data?.repositories.length}
             onClick={() => {
-              setPreview(null);
+              disarm();
               setCreating((value) => !value);
             }}
           >
@@ -377,12 +424,13 @@ function ScopedPanel({
             size="sm"
             variant="outline"
             disabled={disabled}
-            onClick={() =>
+            onClick={() => {
+              disarm();
               run(async () => {
                 warnings(await post("/sync", {}));
                 await refresh();
-              })
-            }
+              });
+            }}
           >
             Sync Projects
           </Button>
@@ -506,7 +554,10 @@ function ScopedPanel({
           type="search"
           value={search}
           placeholder="name@repo or fuzzy search"
-          onChange={(event) => setSearch(event.target.value)}
+          onChange={(event) => {
+            disarm();
+            setSearch(event.target.value);
+          }}
         />
       </label>
       <div
@@ -521,7 +572,10 @@ function ScopedPanel({
           <select
             style={selectStyle}
             value={repo}
-            onChange={(event) => setRepo(event.target.value)}
+            onChange={(event) => {
+              disarm();
+              setRepo(event.target.value);
+            }}
           >
             <option value="">All repositories</option>
             {data?.repositories.map((item) => (
@@ -536,7 +590,10 @@ function ScopedPanel({
           <select
             style={selectStyle}
             value={status}
-            onChange={(event) => setStatus(event.target.value)}
+            onChange={(event) => {
+              disarm();
+              setStatus(event.target.value);
+            }}
           >
             <option value="all">All statuses</option>
             <option value="safe">Clean and merged</option>
@@ -549,7 +606,10 @@ function ScopedPanel({
           <select
             style={selectStyle}
             value={sort}
-            onChange={(event) => setSort(event.target.value)}
+            onChange={(event) => {
+              disarm();
+              setSort(event.target.value);
+            }}
           >
             <option value="recent">Recent</option>
             <option value="repo">Repository</option>
@@ -575,42 +635,10 @@ function ScopedPanel({
           <div style={muted}>Delete directory: {preview.worktree.path}</div>
           <div>Delete branch: {preview.branch}</div>
           <p>{preview.warning}</p>
-          {!previewCurrent && (
-            <p role="alert">
-              The worktree changed. Cancel and request a new preview.
-            </p>
-          )}
-          <div style={row}>
-            <Button
-              type="button"
-              size="sm"
-              variant="destructive"
-              disabled={disabled || !previewCurrent}
-              onClick={() =>
-                run(async () => {
-                  const result = await post("/remove", {
-                    token: preview.token,
-                  });
-                  if (!record(result) || !result.removed)
-                    throw new Error("The backend did not confirm removal.");
-                  warnings(result);
-                  if (current()) setPreview(null);
-                  await refresh();
-                })
-              }
-            >
-              Remove worktree and branch
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              disabled={busy}
-              onClick={() => setPreview(null)}
-            >
-              Cancel removal
-            </Button>
-          </div>
+          <p>
+            Deleting this checkout also deletes its worktree-local TODO notes.
+            Click the red delete icon again within five seconds to remove it.
+          </p>
         </section>
       )}
       <div aria-live="polite" style={muted}>
@@ -638,10 +666,39 @@ function ScopedPanel({
             }}
           >
             <strong style={{ overflowWrap: "anywhere" }}>
-              {worktree.name}@{worktree.repo}
+              <span
+                title={worktree.path}
+                style={{ color: "var(--ui-text-primary)" }}
+              >
+                {worktree.name}
+              </span>
+              @
+              <span
+                title={
+                  worktree.upstream
+                    ? `Upstream: ${worktree.upstream}`
+                    : "No upstream"
+                }
+                style={{ color: "var(--ui-accent)" }}
+              >
+                {worktree.repo}
+              </span>
             </strong>
-            <div style={muted}>{worktree.path}</div>
             <div style={row}>
+              <Button
+                type="button"
+                size="xs"
+                variant="ghost"
+                disabled={disabled}
+                aria-label={`Open ${worktree.name}@${worktree.repo} in Hermes`}
+                title="New session"
+                onClick={() => {
+                  disarm();
+                  run(() => open(worktree));
+                }}
+              >
+                <Codicon name="add" />
+              </Button>
               <Badge variant={worktree.clean ? "muted" : "warn"}>
                 {worktree.clean ? "Clean" : "Dirty"}
               </Badge>
@@ -660,42 +717,68 @@ function ScopedPanel({
               {worktree.pullRequest && (
                 <span style={muted}>PR {worktree.pullRequest}</span>
               )}
+              <Button
+                type="button"
+                size="xs"
+                variant="ghost"
+                style={{
+                  marginLeft: "auto",
+                  color:
+                    preview?.worktree.path === worktree.path
+                      ? "var(--ui-red)"
+                      : "var(--ui-text-quaternary)",
+                }}
+                disabled={disabled || !safeToRemove(worktree)}
+                title={
+                  safeToRemove(worktree)
+                    ? preview?.worktree.path === worktree.path
+                      ? "Click again to delete"
+                      : "Preview removal"
+                    : "Requires clean, merged status without errors"
+                }
+                aria-label={`Remove ${worktree.name}@${worktree.repo}`}
+                onClick={() => {
+                  const armed = consent.current;
+                  if (
+                    armed &&
+                    armed.worktree.repo === worktree.repo &&
+                    armed.worktree.name === worktree.name &&
+                    previewCurrent &&
+                    Date.now() < consentDeadline.current &&
+                    JSON.stringify(
+                      client
+                        .getQueryData<typeof data>(queryKey)
+                        ?.worktrees.find(
+                          (item) =>
+                            item.repo === worktree.repo &&
+                            item.name === worktree.name,
+                        ),
+                    ) === consentSnapshot.current
+                  ) {
+                    disarm();
+                    run(async () => {
+                      const result = await post("/remove", {
+                        token: armed.token,
+                      });
+                      if (!record(result) || !result.removed)
+                        throw new Error("The backend did not confirm removal.");
+                      warnings(result);
+                      await refresh();
+                    });
+                  } else {
+                    disarm();
+                    run(() => prepareRemove(worktree));
+                  }
+                }}
+              >
+                <Codicon name="trash" />
+              </Button>
             </div>
-            {worktree.upstream && (
-              <div style={muted}>Upstream: {worktree.upstream}</div>
-            )}
             {worktree.statusError && (
               <p role="status" style={muted}>
                 Git status could not be read. Removal is disabled.
               </p>
             )}
-            <div style={row}>
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                disabled={disabled}
-                aria-label={`Open ${worktree.name}@${worktree.repo} in Hermes`}
-                onClick={() => run(() => open(worktree))}
-              >
-                Open in Hermes
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                disabled={disabled || !safeToRemove(worktree)}
-                title={
-                  safeToRemove(worktree)
-                    ? "Preview removal"
-                    : "Requires clean, merged status without errors"
-                }
-                aria-label={`Remove ${worktree.name}@${worktree.repo}`}
-                onClick={() => run(() => prepareRemove(worktree))}
-              >
-                Remove…
-              </Button>
-            </div>
           </li>
         ))}
       </ul>

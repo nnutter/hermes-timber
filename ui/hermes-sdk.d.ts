@@ -65,6 +65,13 @@ declare module "@hermes/plugin-sdk" {
       loading?: boolean;
     }
   >;
+  export const Codicon: ComponentType<
+    ComponentProps<"i"> & {
+      name: string;
+      size?: number | string;
+      spinning?: boolean;
+    }
+  >;
   export const Input: ComponentType<ComponentProps<"input">>;
   export const Badge: ComponentType<
     ComponentProps<"span"> & {

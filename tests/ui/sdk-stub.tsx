@@ -65,3 +65,10 @@ export function Badge({
 }: ComponentProps<"span"> & { variant?: string; size?: string }) {
   return <span {...props} />;
 }
+
+export function Codicon({
+  name,
+  ...props
+}: ComponentProps<"i"> & { name: string }) {
+  return <i aria-hidden="true" data-icon={name} {...props} />;
+}

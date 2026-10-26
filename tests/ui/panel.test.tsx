@@ -101,7 +101,10 @@ function deferred() {
   return { promise, resolve };
 }
 async function loaded() {
-  await screen.findByText("done@app");
+  await screen.findByText(
+    (_, element) =>
+      element?.tagName === "STRONG" && element.textContent === "done@app",
+  );
 }
 async function refresh() {
   await act(async () => {
@@ -129,7 +132,12 @@ describe("Timber desktop panel", () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1);
       });
-      expect(screen.getByText("done@app")).toBeVisible();
+      expect(
+        screen.getByText(
+          (_, element) =>
+            element?.tagName === "STRONG" && element.textContent === "done@app",
+        ),
+      ).toBeVisible();
       rest.mockRejectedValue(new Error(`${status}: {"reason":"no_cookie"}`));
       await act(async () => {
         await vi.advanceTimersByTimeAsync(15_000);
@@ -269,7 +277,12 @@ describe("Timber desktop panel", () => {
       target: { value: "dn@ap" },
     });
     expect(within(list).getAllByRole("listitem")).toHaveLength(1);
-    expect(within(list).getByText("done@app")).toBeVisible();
+    expect(
+      within(list).getByText(
+        (_, element) =>
+          element?.tagName === "STRONG" && element.textContent === "done@app",
+      ),
+    ).toBeVisible();
     fireEvent.change(screen.getByLabelText("Find worktrees"), {
       target: { value: "" },
     });
@@ -280,7 +293,12 @@ describe("Timber desktop panel", () => {
     fireEvent.change(screen.getByLabelText("Status"), {
       target: { value: "error" },
     });
-    expect(within(list).getByText("broken@lib")).toBeVisible();
+    expect(
+      within(list).getByText(
+        (_, element) =>
+          element?.tagName === "STRONG" && element.textContent === "broken@lib",
+      ),
+    ).toBeVisible();
     fireEvent.change(screen.getByLabelText("Status"), {
       target: { value: "all" },
     });
@@ -290,7 +308,14 @@ describe("Timber desktop panel", () => {
     expect(
       within(list)
         .getAllByRole("listitem")
-        .map((item) => within(item).getByText(/@/).textContent),
+        .map(
+          (item) =>
+            within(item).getByText(
+              (_, element) =>
+                element?.tagName === "STRONG" &&
+                Boolean(element.textContent?.includes("@")),
+            ).textContent,
+        ),
     ).toEqual(["broken@lib", "done@app", "working@app"]);
     fireEvent.change(screen.getByLabelText("Repository"), {
       target: { value: "empty" },
@@ -347,7 +372,12 @@ describe("Timber desktop panel", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Creation outcome unknown",
     );
-    expect(screen.getByText("done@app")).toBeVisible();
+    expect(
+      screen.getByText(
+        (_, element) =>
+          element?.tagName === "STRONG" && element.textContent === "done@app",
+      ),
+    ).toBeVisible();
     expect(
       screen.getByRole("button", { name: "Create worktree" }),
     ).toBeDisabled();
@@ -414,10 +444,9 @@ describe("Timber desktop panel", () => {
       body: { repo: "app", name: "done" },
     });
     expect(rest.mock.calls.some(([path]) => path === "/remove")).toBe(false);
+    expect(within(dialog).getByText(/TODO/)).toBeVisible();
     await userEvent.click(
-      within(dialog).getByRole("button", {
-        name: "Remove worktree and branch",
-      }),
+      screen.getByRole("button", { name: "Remove done@app" }),
     );
     await waitFor(() =>
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
@@ -427,8 +456,108 @@ describe("Timber desktop panel", () => {
       body: { token: "snapshot-1" },
     });
     await waitFor(() =>
-      expect(screen.queryByText("done@app")).not.toBeInTheDocument(),
+      expect(
+        screen.queryByText(
+          (_, element) =>
+            element?.tagName === "STRONG" && element.textContent === "done@app",
+        ),
+      ).not.toBeInTheDocument(),
     );
+  });
+
+  it("expires removal consent and requires a fresh preview", async () => {
+    vi.useFakeTimers();
+    rest.mockResolvedValueOnce(state).mockResolvedValue({
+      token: "token",
+      worktree: clean,
+      branch: "done",
+      warning: "Delete",
+    });
+    mount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Remove done@app" }));
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(screen.getByRole("dialog")).toBeVisible();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Remove done@app" }));
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(
+      rest.mock.calls.filter(([path]) => path === "/remove/preview"),
+    ).toHaveLength(2);
+    expect(rest.mock.calls.some(([path]) => path === "/remove")).toBe(false);
+  });
+
+  it("discards a late preview after the search changes", async () => {
+    const pending = deferred();
+    rest
+      .mockResolvedValueOnce(state)
+      .mockImplementationOnce(() => pending.promise);
+    mount();
+    await loaded();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Remove done@app" }),
+    );
+    fireEvent.change(screen.getByLabelText("Find worktrees"), {
+      target: { value: "done" },
+    });
+    await act(async () => {
+      pending.resolve({
+        token: "late",
+        worktree: clean,
+        branch: "done",
+        warning: "Delete",
+      });
+    });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(rest.mock.calls.some(([path]) => path === "/remove")).toBe(false);
+  });
+
+  it("disarms consent on refresh and on gateway disconnect", async () => {
+    const preview = {
+      token: "token",
+      worktree: clean,
+      branch: "done",
+      warning: "Delete",
+    };
+    rest.mockImplementation(async (path) =>
+      path === "/remove/preview" ? preview : state,
+    );
+    mount();
+    await loaded();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Remove done@app" }),
+    );
+    await screen.findByRole("dialog");
+    await refresh();
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Remove done@app" }),
+    );
+    await screen.findByRole("dialog");
+    act(() => host.state.gateway.set("closed"));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    act(() => host.state.gateway.set("open"));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Remove done@app" }),
+      ).toBeEnabled(),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Remove done@app" }),
+    );
+    await screen.findByRole("dialog");
+    expect(rest.mock.calls.some(([path]) => path === "/remove")).toBe(false);
   });
 
   it("keeps cached rows after a failed poll, disables actions, and recovers on refresh", async () => {
@@ -436,7 +565,12 @@ describe("Timber desktop panel", () => {
     await loaded();
     rest.mockRejectedValue(new Error("Backend unreachable"));
     await refresh();
-    expect(screen.getByText("done@app")).toBeVisible();
+    expect(
+      screen.getByText(
+        (_, element) =>
+          element?.tagName === "STRONG" && element.textContent === "done@app",
+      ),
+    ).toBeVisible();
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Cached results are stale",
     );
@@ -486,7 +620,12 @@ describe("Timber desktop panel", () => {
         );
       });
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-      expect(screen.queryByText("done@app")).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(
+          (_, element) =>
+            element?.tagName === "STRONG" && element.textContent === "done@app",
+        ),
+      ).not.toBeInTheDocument();
       expect(
         screen.getByRole("button", { name: "Sync Projects" }),
       ).toBeDisabled();
@@ -612,7 +751,12 @@ describe("Timber desktop panel", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "invalid state response",
     );
-    expect(screen.queryByText("done@app")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        (_, element) =>
+          element?.tagName === "STRONG" && element.textContent === "done@app",
+      ),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New worktree" })).toBeDisabled();
   });
 

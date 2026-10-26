@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Badge,
   Button,
+  Codicon,
   host as host2,
   Input,
   useMutation,
@@ -168,7 +169,7 @@ function TimberPanel({ context }) {
       scope: scope.key,
       online: scope.online
     },
-    scope.key
+    JSON.stringify([scope.key, scope.online])
   );
 }
 function ScopedPanel({
@@ -185,6 +186,26 @@ function ScopedPanel({
     };
   }, []);
   const current = () => alive.current && scopeKey() === scope;
+  const consentVersion = useRef(0);
+  const consentTimer = useRef(null);
+  const consent = useRef(null);
+  const consentSnapshot = useRef("");
+  const consentDeadline = useRef(0);
+  const actionLocked = useRef(false);
+  const disarm = () => {
+    consentVersion.current++;
+    consent.current = null;
+    if (consentTimer.current !== null) clearTimeout(consentTimer.current);
+    consentTimer.current = null;
+    setPreview(null);
+  };
+  useEffect(
+    () => () => {
+      consentVersion.current++;
+      if (consentTimer.current !== null) clearTimeout(consentTimer.current);
+    },
+    []
+  );
   const queryKey = ["hermes-timber", scope, "state"];
   const consecutiveFailures = useRef(0);
   const [authenticationRequired, setAuthenticationRequired] = useState(
@@ -198,6 +219,7 @@ function ScopedPanel({
     queryKey,
     queryFn: async () => {
       assertScope(scope);
+      disarm();
       try {
         const result = parseState(await context.rest("/state"));
         assertScope(scope);
@@ -275,7 +297,15 @@ function ScopedPanel({
   });
   const busy = operation.isPending;
   const disabled = !ready || busy || error !== null || listing.isFetching;
-  const run = (action) => operation.mutate(action);
+  const run = (action) => {
+    if (actionLocked.current) return;
+    actionLocked.current = true;
+    operation.mutate(action, {
+      onSettled: () => {
+        actionLocked.current = false;
+      }
+    });
+  };
   const warnings = (response) => {
     const result = responseWarnings(response);
     if (current()) setNotice(result.length ? result : ["Completed."]);
@@ -328,6 +358,8 @@ function ScopedPanel({
       throw new Error(
         "Only clean, merged worktrees without status errors can be removed."
       );
+    const version = consentVersion.current;
+    const snapshot2 = JSON.stringify(worktree);
     const result = parsePreview(
       await post("/remove/preview", {
         repo: worktree.repo,
@@ -339,7 +371,16 @@ function ScopedPanel({
         "The worktree changed. Refresh Timber before requesting another preview."
       );
     }
-    if (current()) setPreview(result);
+    const latest = client.getQueryData(queryKey)?.worktrees.find(
+      (item) => item.repo === worktree.repo && item.name === worktree.name
+    );
+    if (!current() || version !== consentVersion.current || JSON.stringify(latest) !== snapshot2)
+      return;
+    consentSnapshot.current = snapshot2;
+    consentDeadline.current = Date.now() + 5e3;
+    consent.current = result;
+    setPreview(result);
+    consentTimer.current = setTimeout(disarm, 5e3);
   }
   function create(event) {
     event.preventDefault();
@@ -414,7 +455,7 @@ function ScopedPanel({
                 variant: "secondary",
                 disabled: disabled || !data?.repositories.length,
                 onClick: () => {
-                  setPreview(null);
+                  disarm();
                   setCreating((value) => !value);
                 },
                 children: "New worktree"
@@ -427,10 +468,13 @@ function ScopedPanel({
                 size: "sm",
                 variant: "outline",
                 disabled,
-                onClick: () => run(async () => {
-                  warnings(await post("/sync", {}));
-                  await refresh();
-                }),
+                onClick: () => {
+                  disarm();
+                  run(async () => {
+                    warnings(await post("/sync", {}));
+                    await refresh();
+                  });
+                },
                 children: "Sync Projects"
               }
             ),
@@ -538,7 +582,10 @@ function ScopedPanel({
               type: "search",
               value: search,
               placeholder: "name@repo or fuzzy search",
-              onChange: (event) => setSearch(event.target.value)
+              onChange: (event) => {
+                disarm();
+                setSearch(event.target.value);
+              }
             }
           )
         ] }),
@@ -558,7 +605,10 @@ function ScopedPanel({
                   {
                     style: selectStyle,
                     value: repo,
-                    onChange: (event) => setRepo(event.target.value),
+                    onChange: (event) => {
+                      disarm();
+                      setRepo(event.target.value);
+                    },
                     children: [
                       /* @__PURE__ */ jsx("option", { value: "", children: "All repositories" }),
                       data?.repositories.map((item) => /* @__PURE__ */ jsx("option", { value: item, children: item }, item))
@@ -573,7 +623,10 @@ function ScopedPanel({
                   {
                     style: selectStyle,
                     value: status,
-                    onChange: (event) => setStatus(event.target.value),
+                    onChange: (event) => {
+                      disarm();
+                      setStatus(event.target.value);
+                    },
                     children: [
                       /* @__PURE__ */ jsx("option", { value: "all", children: "All statuses" }),
                       /* @__PURE__ */ jsx("option", { value: "safe", children: "Clean and merged" }),
@@ -590,7 +643,10 @@ function ScopedPanel({
                   {
                     style: selectStyle,
                     value: sort,
-                    onChange: (event) => setSort(event.target.value),
+                    onChange: (event) => {
+                      disarm();
+                      setSort(event.target.value);
+                    },
                     children: [
                       /* @__PURE__ */ jsx("option", { value: "recent", children: "Recent" }),
                       /* @__PURE__ */ jsx("option", { value: "repo", children: "Repository" }),
@@ -631,40 +687,7 @@ function ScopedPanel({
                 preview.branch
               ] }),
               /* @__PURE__ */ jsx("p", { children: preview.warning }),
-              !previewCurrent && /* @__PURE__ */ jsx("p", { role: "alert", children: "The worktree changed. Cancel and request a new preview." }),
-              /* @__PURE__ */ jsxs("div", { style: row, children: [
-                /* @__PURE__ */ jsx(
-                  Button,
-                  {
-                    type: "button",
-                    size: "sm",
-                    variant: "destructive",
-                    disabled: disabled || !previewCurrent,
-                    onClick: () => run(async () => {
-                      const result = await post("/remove", {
-                        token: preview.token
-                      });
-                      if (!record(result) || !result.removed)
-                        throw new Error("The backend did not confirm removal.");
-                      warnings(result);
-                      if (current()) setPreview(null);
-                      await refresh();
-                    }),
-                    children: "Remove worktree and branch"
-                  }
-                ),
-                /* @__PURE__ */ jsx(
-                  Button,
-                  {
-                    type: "button",
-                    size: "sm",
-                    variant: "ghost",
-                    disabled: busy,
-                    onClick: () => setPreview(null),
-                    children: "Cancel removal"
-                  }
-                )
-              ] })
+              /* @__PURE__ */ jsx("p", { children: "Deleting this checkout also deletes its worktree-local TODO notes. Click the red delete icon again within five seconds to remove it." })
             ]
           }
         ),
@@ -688,12 +711,41 @@ function ScopedPanel({
                 },
                 children: [
                   /* @__PURE__ */ jsxs("strong", { style: { overflowWrap: "anywhere" }, children: [
-                    worktree.name,
+                    /* @__PURE__ */ jsx(
+                      "span",
+                      {
+                        title: worktree.path,
+                        style: { color: "var(--ui-text-primary)" },
+                        children: worktree.name
+                      }
+                    ),
                     "@",
-                    worktree.repo
+                    /* @__PURE__ */ jsx(
+                      "span",
+                      {
+                        title: worktree.upstream ? `Upstream: ${worktree.upstream}` : "No upstream",
+                        style: { color: "var(--ui-accent)" },
+                        children: worktree.repo
+                      }
+                    )
                   ] }),
-                  /* @__PURE__ */ jsx("div", { style: muted, children: worktree.path }),
                   /* @__PURE__ */ jsxs("div", { style: row, children: [
+                    /* @__PURE__ */ jsx(
+                      Button,
+                      {
+                        type: "button",
+                        size: "xs",
+                        variant: "ghost",
+                        disabled,
+                        "aria-label": `Open ${worktree.name}@${worktree.repo} in Hermes`,
+                        title: "New session",
+                        onClick: () => {
+                          disarm();
+                          run(() => open(worktree));
+                        },
+                        children: /* @__PURE__ */ jsx(Codicon, { name: "add" })
+                      }
+                    ),
                     /* @__PURE__ */ jsx(Badge, { variant: worktree.clean ? "muted" : "warn", children: worktree.clean ? "Clean" : "Dirty" }),
                     worktree.merged && /* @__PURE__ */ jsx(Badge, { variant: "success", children: "Merged" }),
                     worktree.statusError && /* @__PURE__ */ jsx(Badge, { variant: "destructive", children: "Status error" }),
@@ -712,40 +764,47 @@ function ScopedPanel({
                     worktree.pullRequest && /* @__PURE__ */ jsxs("span", { style: muted, children: [
                       "PR ",
                       worktree.pullRequest
-                    ] })
-                  ] }),
-                  worktree.upstream && /* @__PURE__ */ jsxs("div", { style: muted, children: [
-                    "Upstream: ",
-                    worktree.upstream
-                  ] }),
-                  worktree.statusError && /* @__PURE__ */ jsx("p", { role: "status", style: muted, children: "Git status could not be read. Removal is disabled." }),
-                  /* @__PURE__ */ jsxs("div", { style: row, children: [
+                    ] }),
                     /* @__PURE__ */ jsx(
                       Button,
                       {
                         type: "button",
-                        size: "sm",
-                        variant: "secondary",
-                        disabled,
-                        "aria-label": `Open ${worktree.name}@${worktree.repo} in Hermes`,
-                        onClick: () => run(() => open(worktree)),
-                        children: "Open in Hermes"
-                      }
-                    ),
-                    /* @__PURE__ */ jsx(
-                      Button,
-                      {
-                        type: "button",
-                        size: "sm",
+                        size: "xs",
                         variant: "ghost",
+                        style: {
+                          marginLeft: "auto",
+                          color: preview?.worktree.path === worktree.path ? "var(--ui-red)" : "var(--ui-text-quaternary)"
+                        },
                         disabled: disabled || !safeToRemove(worktree),
-                        title: safeToRemove(worktree) ? "Preview removal" : "Requires clean, merged status without errors",
+                        title: safeToRemove(worktree) ? preview?.worktree.path === worktree.path ? "Click again to delete" : "Preview removal" : "Requires clean, merged status without errors",
                         "aria-label": `Remove ${worktree.name}@${worktree.repo}`,
-                        onClick: () => run(() => prepareRemove(worktree)),
-                        children: "Remove\u2026"
+                        onClick: () => {
+                          const armed = consent.current;
+                          if (armed && armed.worktree.repo === worktree.repo && armed.worktree.name === worktree.name && previewCurrent && Date.now() < consentDeadline.current && JSON.stringify(
+                            client.getQueryData(queryKey)?.worktrees.find(
+                              (item) => item.repo === worktree.repo && item.name === worktree.name
+                            )
+                          ) === consentSnapshot.current) {
+                            disarm();
+                            run(async () => {
+                              const result = await post("/remove", {
+                                token: armed.token
+                              });
+                              if (!record(result) || !result.removed)
+                                throw new Error("The backend did not confirm removal.");
+                              warnings(result);
+                              await refresh();
+                            });
+                          } else {
+                            disarm();
+                            run(() => prepareRemove(worktree));
+                          }
+                        },
+                        children: /* @__PURE__ */ jsx(Codicon, { name: "trash" })
                       }
                     )
-                  ] })
+                  ] }),
+                  worktree.statusError && /* @__PURE__ */ jsx("p", { role: "status", style: muted, children: "Git status could not be read. Removal is disabled." })
                 ]
               },
               JSON.stringify([worktree.repo, worktree.name])
