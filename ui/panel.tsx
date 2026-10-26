@@ -12,7 +12,6 @@ import {
 } from "@hermes/plugin-sdk";
 import type { PluginContext } from "@hermes/plugin-sdk";
 import {
-  fuzzyMatch,
   isWorktree,
   message,
   parsePreview,
@@ -138,8 +137,6 @@ function ScopedPanel({
     staleTime: 10_000,
   });
   const [search, setSearch] = useState("");
-  const [repo, setRepo] = useState("");
-  const [status, setStatus] = useState("all");
   const [sort, setSort] = useState("recent");
   const [creating, setCreating] = useState(false);
   const [createRepo, setCreateRepo] = useState("");
@@ -336,18 +333,28 @@ function ScopedPanel({
   }
 
   const filtered = (data?.worktrees ?? [])
-    .filter(
-      (worktree) =>
-        (!repo || worktree.repo === repo) &&
-        fuzzyMatch(
-          search,
-          `${worktree.name}@${worktree.repo} ${worktree.path} ${worktree.upstream ?? ""}`,
-        ) &&
-        (status === "all" ||
-          (status === "safe" && safeToRemove(worktree)) ||
-          (status === "dirty" && !worktree.clean) ||
-          (status === "error" && Boolean(worktree.statusError))),
-    )
+    .filter((worktree) => {
+      const needle = search.trim().toLocaleLowerCase();
+      const selector = `${worktree.name}@${worktree.repo}`;
+      const fields = [
+        selector,
+        `${worktree.name} @ ${worktree.repo}`,
+        worktree.name,
+        worktree.repo,
+        worktree.path,
+        worktree.upstream ?? "",
+        worktree.clean ? "clean" : "dirty",
+        worktree.merged ? "merged" : "",
+        worktree.statusError ? "status error" : "",
+        `ahead ${worktree.ahead ?? 0}`,
+        `behind ${worktree.behind ?? 0}`,
+        worktree.todoTotal !== undefined
+          ? `todo ${worktree.todoDone ?? 0}/${worktree.todoTotal}`
+          : "",
+        worktree.pullRequest ?? "",
+      ];
+      return fields.some((field) => field.toLocaleLowerCase().includes(needle));
+    })
     .sort((left, right) => {
       if (sort === "recent") {
         const difference = (recent[right.path] ?? 0) - (recent[left.path] ?? 0);
@@ -548,58 +555,24 @@ function ScopedPanel({
           </div>
         </form>
       )}
-      <label style={stack}>
-        Find worktrees
-        <Input
-          type="search"
-          value={search}
-          placeholder="name@repo or fuzzy search"
-          onChange={(event) => {
-            disarm();
-            setSearch(event.target.value);
-          }}
-        />
-      </label>
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
+          gridTemplateColumns: "minmax(0, 1fr) minmax(100px, auto)",
           gap: 8,
         }}
       >
         <label style={stack}>
-          Repository
-          <select
-            style={selectStyle}
-            value={repo}
+          Find worktrees
+          <Input
+            type="search"
+            value={search}
+            placeholder="Search worktrees"
             onChange={(event) => {
               disarm();
-              setRepo(event.target.value);
+              setSearch(event.target.value);
             }}
-          >
-            <option value="">All repositories</option>
-            {data?.repositories.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label style={stack}>
-          Status
-          <select
-            style={selectStyle}
-            value={status}
-            onChange={(event) => {
-              disarm();
-              setStatus(event.target.value);
-            }}
-          >
-            <option value="all">All statuses</option>
-            <option value="safe">Clean and merged</option>
-            <option value="dirty">Dirty</option>
-            <option value="error">Status error</option>
-          </select>
+          />
         </label>
         <label style={stack}>
           Sort
@@ -617,30 +590,6 @@ function ScopedPanel({
           </select>
         </label>
       </div>
-      {preview && (
-        <section
-          role="dialog"
-          aria-modal="false"
-          aria-label="Confirm worktree removal"
-          style={{
-            ...stack,
-            padding: 10,
-            border: "1px solid var(--ui-stroke-secondary)",
-            borderRadius: 4,
-          }}
-        >
-          <strong>
-            Remove {preview.worktree.name}@{preview.worktree.repo}?
-          </strong>
-          <div style={muted}>Delete directory: {preview.worktree.path}</div>
-          <div>Delete branch: {preview.branch}</div>
-          <p>{preview.warning}</p>
-          <p>
-            Deleting this checkout also deletes its worktree-local TODO notes.
-            Click the red delete icon again within five seconds to remove it.
-          </p>
-        </section>
-      )}
       <div aria-live="polite" style={muted}>
         {data ? `${filtered.length} of ${data.worktrees.length} worktrees` : ""}
         {busy ? " · Working…" : ""}
@@ -665,25 +614,25 @@ function ScopedPanel({
               paddingTop: 10,
             }}
           >
-            <strong style={{ overflowWrap: "anywhere" }}>
+            <div style={{ overflowWrap: "anywhere" }}>
               <span
                 title={worktree.path}
                 style={{ color: "var(--ui-text-primary)" }}
               >
                 {worktree.name}
               </span>
-              @
+              {" @ "}
               <span
                 title={
                   worktree.upstream
                     ? `Upstream: ${worktree.upstream}`
                     : "No upstream"
                 }
-                style={{ color: "var(--ui-accent)" }}
+                style={{ color: "var(--ui-text-primary)" }}
               >
                 {worktree.repo}
               </span>
-            </strong>
+            </div>
             <div style={row}>
               <Button
                 type="button"
@@ -710,8 +659,17 @@ function ScopedPanel({
                 ↑{worktree.ahead ?? 0} ↓{worktree.behind ?? 0}
               </span>
               {worktree.todoTotal !== undefined && (
-                <span style={muted}>
-                  TODO {worktree.todoDone ?? 0}/{worktree.todoTotal}
+                <span
+                  style={{
+                    ...muted,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                  }}
+                  aria-label={`TODO ${worktree.todoDone ?? 0} of ${worktree.todoTotal} done`}
+                >
+                  <Codicon name="check-all" /> {worktree.todoDone ?? 0}/
+                  {worktree.todoTotal}
                 </span>
               )}
               {worktree.pullRequest && (
@@ -732,11 +690,15 @@ function ScopedPanel({
                 title={
                   safeToRemove(worktree)
                     ? preview?.worktree.path === worktree.path
-                      ? "Click again to delete"
+                      ? `Click again to delete ${preview.worktree.name}@${preview.worktree.repo}, branch ${preview.branch}, directory ${preview.worktree.path}, and worktree-local TODO notes within five seconds.`
                       : "Preview removal"
                     : "Requires clean, merged status without errors"
                 }
-                aria-label={`Remove ${worktree.name}@${worktree.repo}`}
+                aria-label={
+                  preview?.worktree.path === worktree.path
+                    ? `Remove ${worktree.name}@${worktree.repo}. Click again to delete branch ${preview.branch}, directory ${preview.worktree.path}, and worktree-local TODO notes within five seconds.`
+                    : `Remove ${worktree.name}@${worktree.repo}`
+                }
                 onClick={() => {
                   const armed = consent.current;
                   if (

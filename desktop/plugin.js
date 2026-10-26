@@ -69,14 +69,6 @@ function responseWarnings(value) {
 function message(error) {
   return error instanceof Error ? error.message : "The operation failed.";
 }
-function fuzzyMatch(query, text) {
-  let cursor = 0;
-  const needle = query.toLocaleLowerCase().trim();
-  for (const character of text.toLocaleLowerCase()) {
-    if (character === needle[cursor]) cursor++;
-  }
-  return cursor === needle.length;
-}
 
 // ui/polling.ts
 var NORMAL_POLL_MS = 15e3;
@@ -240,8 +232,6 @@ function ScopedPanel({
     staleTime: 1e4
   });
   const [search, setSearch] = useState("");
-  const [repo, setRepo] = useState("");
-  const [status, setStatus] = useState("all");
   const [sort, setSort] = useState("recent");
   const [creating, setCreating] = useState(false);
   const [createRepo, setCreateRepo] = useState("");
@@ -405,12 +395,26 @@ function ScopedPanel({
       await refresh();
     });
   }
-  const filtered = (data?.worktrees ?? []).filter(
-    (worktree) => (!repo || worktree.repo === repo) && fuzzyMatch(
-      search,
-      `${worktree.name}@${worktree.repo} ${worktree.path} ${worktree.upstream ?? ""}`
-    ) && (status === "all" || status === "safe" && safeToRemove(worktree) || status === "dirty" && !worktree.clean || status === "error" && Boolean(worktree.statusError))
-  ).sort((left, right) => {
+  const filtered = (data?.worktrees ?? []).filter((worktree) => {
+    const needle = search.trim().toLocaleLowerCase();
+    const selector = `${worktree.name}@${worktree.repo}`;
+    const fields = [
+      selector,
+      `${worktree.name} @ ${worktree.repo}`,
+      worktree.name,
+      worktree.repo,
+      worktree.path,
+      worktree.upstream ?? "",
+      worktree.clean ? "clean" : "dirty",
+      worktree.merged ? "merged" : "",
+      worktree.statusError ? "status error" : "",
+      `ahead ${worktree.ahead ?? 0}`,
+      `behind ${worktree.behind ?? 0}`,
+      worktree.todoTotal !== void 0 ? `todo ${worktree.todoDone ?? 0}/${worktree.todoTotal}` : "",
+      worktree.pullRequest ?? ""
+    ];
+    return fields.some((field) => field.toLocaleLowerCase().includes(needle));
+  }).sort((left, right) => {
     if (sort === "recent") {
       const difference = (recent[right.path] ?? 0) - (recent[left.path] ?? 0);
       if (difference) return difference;
@@ -574,65 +578,27 @@ function ScopedPanel({
             ]
           }
         ),
-        /* @__PURE__ */ jsxs("label", { style: stack, children: [
-          "Find worktrees",
-          /* @__PURE__ */ jsx(
-            Input,
-            {
-              type: "search",
-              value: search,
-              placeholder: "name@repo or fuzzy search",
-              onChange: (event) => {
-                disarm();
-                setSearch(event.target.value);
-              }
-            }
-          )
-        ] }),
         /* @__PURE__ */ jsxs(
           "div",
           {
             style: {
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
+              gridTemplateColumns: "minmax(0, 1fr) minmax(100px, auto)",
               gap: 8
             },
             children: [
               /* @__PURE__ */ jsxs("label", { style: stack, children: [
-                "Repository",
-                /* @__PURE__ */ jsxs(
-                  "select",
+                "Find worktrees",
+                /* @__PURE__ */ jsx(
+                  Input,
                   {
-                    style: selectStyle,
-                    value: repo,
+                    type: "search",
+                    value: search,
+                    placeholder: "Search worktrees",
                     onChange: (event) => {
                       disarm();
-                      setRepo(event.target.value);
-                    },
-                    children: [
-                      /* @__PURE__ */ jsx("option", { value: "", children: "All repositories" }),
-                      data?.repositories.map((item) => /* @__PURE__ */ jsx("option", { value: item, children: item }, item))
-                    ]
-                  }
-                )
-              ] }),
-              /* @__PURE__ */ jsxs("label", { style: stack, children: [
-                "Status",
-                /* @__PURE__ */ jsxs(
-                  "select",
-                  {
-                    style: selectStyle,
-                    value: status,
-                    onChange: (event) => {
-                      disarm();
-                      setStatus(event.target.value);
-                    },
-                    children: [
-                      /* @__PURE__ */ jsx("option", { value: "all", children: "All statuses" }),
-                      /* @__PURE__ */ jsx("option", { value: "safe", children: "Clean and merged" }),
-                      /* @__PURE__ */ jsx("option", { value: "dirty", children: "Dirty" }),
-                      /* @__PURE__ */ jsx("option", { value: "error", children: "Status error" })
-                    ]
+                      setSearch(event.target.value);
+                    }
                   }
                 )
               ] }),
@@ -658,39 +624,6 @@ function ScopedPanel({
             ]
           }
         ),
-        preview && /* @__PURE__ */ jsxs(
-          "section",
-          {
-            role: "dialog",
-            "aria-modal": "false",
-            "aria-label": "Confirm worktree removal",
-            style: {
-              ...stack,
-              padding: 10,
-              border: "1px solid var(--ui-stroke-secondary)",
-              borderRadius: 4
-            },
-            children: [
-              /* @__PURE__ */ jsxs("strong", { children: [
-                "Remove ",
-                preview.worktree.name,
-                "@",
-                preview.worktree.repo,
-                "?"
-              ] }),
-              /* @__PURE__ */ jsxs("div", { style: muted, children: [
-                "Delete directory: ",
-                preview.worktree.path
-              ] }),
-              /* @__PURE__ */ jsxs("div", { children: [
-                "Delete branch: ",
-                preview.branch
-              ] }),
-              /* @__PURE__ */ jsx("p", { children: preview.warning }),
-              /* @__PURE__ */ jsx("p", { children: "Deleting this checkout also deletes its worktree-local TODO notes. Click the red delete icon again within five seconds to remove it." })
-            ]
-          }
-        ),
         /* @__PURE__ */ jsxs("div", { "aria-live": "polite", style: muted, children: [
           data ? `${filtered.length} of ${data.worktrees.length} worktrees` : "",
           busy ? " \xB7 Working\u2026" : ""
@@ -710,7 +643,7 @@ function ScopedPanel({
                   paddingTop: 10
                 },
                 children: [
-                  /* @__PURE__ */ jsxs("strong", { style: { overflowWrap: "anywhere" }, children: [
+                  /* @__PURE__ */ jsxs("div", { style: { overflowWrap: "anywhere" }, children: [
                     /* @__PURE__ */ jsx(
                       "span",
                       {
@@ -719,12 +652,12 @@ function ScopedPanel({
                         children: worktree.name
                       }
                     ),
-                    "@",
+                    " @ ",
                     /* @__PURE__ */ jsx(
                       "span",
                       {
                         title: worktree.upstream ? `Upstream: ${worktree.upstream}` : "No upstream",
-                        style: { color: "var(--ui-accent)" },
+                        style: { color: "var(--ui-text-primary)" },
                         children: worktree.repo
                       }
                     )
@@ -755,12 +688,25 @@ function ScopedPanel({
                       " \u2193",
                       worktree.behind ?? 0
                     ] }),
-                    worktree.todoTotal !== void 0 && /* @__PURE__ */ jsxs("span", { style: muted, children: [
-                      "TODO ",
-                      worktree.todoDone ?? 0,
-                      "/",
-                      worktree.todoTotal
-                    ] }),
+                    worktree.todoTotal !== void 0 && /* @__PURE__ */ jsxs(
+                      "span",
+                      {
+                        style: {
+                          ...muted,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 4
+                        },
+                        "aria-label": `TODO ${worktree.todoDone ?? 0} of ${worktree.todoTotal} done`,
+                        children: [
+                          /* @__PURE__ */ jsx(Codicon, { name: "check-all" }),
+                          " ",
+                          worktree.todoDone ?? 0,
+                          "/",
+                          worktree.todoTotal
+                        ]
+                      }
+                    ),
                     worktree.pullRequest && /* @__PURE__ */ jsxs("span", { style: muted, children: [
                       "PR ",
                       worktree.pullRequest
@@ -776,8 +722,8 @@ function ScopedPanel({
                           color: preview?.worktree.path === worktree.path ? "var(--ui-red)" : "var(--ui-text-quaternary)"
                         },
                         disabled: disabled || !safeToRemove(worktree),
-                        title: safeToRemove(worktree) ? preview?.worktree.path === worktree.path ? "Click again to delete" : "Preview removal" : "Requires clean, merged status without errors",
-                        "aria-label": `Remove ${worktree.name}@${worktree.repo}`,
+                        title: safeToRemove(worktree) ? preview?.worktree.path === worktree.path ? `Click again to delete ${preview.worktree.name}@${preview.worktree.repo}, branch ${preview.branch}, directory ${preview.worktree.path}, and worktree-local TODO notes within five seconds.` : "Preview removal" : "Requires clean, merged status without errors",
+                        "aria-label": preview?.worktree.path === worktree.path ? `Remove ${worktree.name}@${worktree.repo}. Click again to delete branch ${preview.branch}, directory ${preview.worktree.path}, and worktree-local TODO notes within five seconds.` : `Remove ${worktree.name}@${worktree.repo}`,
                         onClick: () => {
                           const armed = consent.current;
                           if (armed && armed.worktree.repo === worktree.repo && armed.worktree.name === worktree.name && previewCurrent && Date.now() < consentDeadline.current && JSON.stringify(

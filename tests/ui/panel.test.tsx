@@ -37,6 +37,7 @@ const clean: Worktree = {
   merged: true,
   statusError: false,
   commit: "abc",
+  upstream: "origin/main",
   ahead: 0,
   behind: 1,
   todoDone: 2,
@@ -103,7 +104,7 @@ function deferred() {
 async function loaded() {
   await screen.findByText(
     (_, element) =>
-      element?.tagName === "STRONG" && element.textContent === "done@app",
+      element?.tagName === "DIV" && element.textContent === "done @ app",
   );
 }
 async function refresh() {
@@ -135,7 +136,7 @@ describe("Timber desktop panel", () => {
       expect(
         screen.getByText(
           (_, element) =>
-            element?.tagName === "STRONG" && element.textContent === "done@app",
+            element?.tagName === "DIV" && element.textContent === "done @ app",
         ),
       ).toBeVisible();
       rest.mockRejectedValue(new Error(`${status}: {"reason":"no_cookie"}`));
@@ -262,46 +263,33 @@ describe("Timber desktop panel", () => {
     ).toBeDisabled();
   });
 
-  it("filters fuzzy selectors and statuses, includes empty repositories, and sorts rows", async () => {
+  it("searches contiguous fields and visible statuses and sorts rows", async () => {
     mount();
     await loaded();
     const list = screen.getByRole("list", { name: "Worktrees" });
-    expect(within(list).getAllByRole("listitem")).toHaveLength(3);
-    expect(
-      screen.getByRole("button", { name: "Remove working@app" }),
-    ).toBeDisabled();
-    expect(
-      screen.getByRole("button", { name: "Remove broken@lib" }),
-    ).toBeDisabled();
-    fireEvent.change(screen.getByLabelText("Find worktrees"), {
-      target: { value: "dn@ap" },
-    });
-    expect(within(list).getAllByRole("listitem")).toHaveLength(1);
-    expect(
-      within(list).getByText(
-        (_, element) =>
-          element?.tagName === "STRONG" && element.textContent === "done@app",
-      ),
-    ).toBeVisible();
-    fireEvent.change(screen.getByLabelText("Find worktrees"), {
-      target: { value: "" },
-    });
-    fireEvent.change(screen.getByLabelText("Status"), {
-      target: { value: "safe" },
-    });
-    expect(within(list).getAllByRole("listitem")).toHaveLength(1);
-    fireEvent.change(screen.getByLabelText("Status"), {
-      target: { value: "error" },
-    });
-    expect(
-      within(list).getByText(
-        (_, element) =>
-          element?.tagName === "STRONG" && element.textContent === "broken@lib",
-      ),
-    ).toBeVisible();
-    fireEvent.change(screen.getByLabelText("Status"), {
-      target: { value: "all" },
-    });
+    const search = screen.getByLabelText("Find worktrees");
+    expect(screen.queryByLabelText("Repository")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Status")).not.toBeInTheDocument();
+    for (const [query, count] of [
+      ["DONE@APP", 1],
+      ["done @ app", 1],
+      ["dn@ap", 0],
+      ["app /trees", 0],
+      ["dirty", 1],
+      ["merged", 2],
+      ["error", 1],
+      ["behind", 3],
+      ["ahead", 3],
+      ["origin/main", 1],
+      ["clean", 2],
+      ["todo", 1],
+    ] as const) {
+      fireEvent.change(search, { target: { value: query } });
+      expect(within(list).queryAllByRole("listitem"), query).toHaveLength(
+        count,
+      );
+    }
+    fireEvent.change(search, { target: { value: "" } });
     fireEvent.change(screen.getByLabelText("Sort"), {
       target: { value: "name" },
     });
@@ -312,15 +300,24 @@ describe("Timber desktop panel", () => {
           (item) =>
             within(item).getByText(
               (_, element) =>
-                element?.tagName === "STRONG" &&
-                Boolean(element.textContent?.includes("@")),
+                element?.tagName === "DIV" &&
+                ["broken @ lib", "done @ app", "working @ app"].includes(
+                  element.textContent ?? "",
+                ),
             ).textContent,
         ),
-    ).toEqual(["broken@lib", "done@app", "working@app"]);
-    fireEvent.change(screen.getByLabelText("Repository"), {
-      target: { value: "empty" },
-    });
-    expect(screen.getByText("No matching worktrees.")).toBeVisible();
+    ).toEqual(["broken @ lib", "done @ app", "working @ app"]);
+    expect(screen.getByTitle("/trees/app/done")).toHaveTextContent("done");
+    expect(screen.getByTitle("Upstream: origin/main")).toHaveTextContent("app");
+    expect(screen.getAllByTitle("No upstream").length).toBeGreaterThan(0);
+    expect(
+      within(list)
+        .getByLabelText("TODO 2 of 3 done")
+        .querySelector('[data-icon="check-all"]'),
+    ).toBeInTheDocument();
+    expect(within(list).getByLabelText("TODO 2 of 3 done")).toHaveTextContent(
+      "2/3",
+    );
   });
 
   it("creates with Timber-selected branch and explicit upstream, then refreshes", async () => {
@@ -375,7 +372,7 @@ describe("Timber desktop panel", () => {
     expect(
       screen.getByText(
         (_, element) =>
-          element?.tagName === "STRONG" && element.textContent === "done@app",
+          element?.tagName === "DIV" && element.textContent === "done @ app",
       ),
     ).toBeVisible();
     expect(
@@ -429,27 +426,32 @@ describe("Timber desktop panel", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Remove done@app" }),
     );
-    const dialog = await screen.findByRole("dialog", {
-      name: "Confirm worktree removal",
-    });
-    expect(within(dialog).getByText("Remove done@app?")).toBeVisible();
-    expect(
-      within(dialog).getByText("Delete directory: /trees/app/done"),
-    ).toBeVisible();
-    expect(
-      within(dialog).getByText("Delete branch: feature/done"),
-    ).toBeVisible();
+    const armed = await screen.findByTitle(/Click again to delete/);
+    expect(armed).toHaveAttribute(
+      "title",
+      expect.stringContaining("feature/done"),
+    );
+    expect(armed).toHaveAttribute(
+      "title",
+      expect.stringContaining("/trees/app/done"),
+    );
+    expect(armed).toHaveAttribute("title", expect.stringContaining("TODO"));
+    expect(armed).toHaveAccessibleName(
+      /feature\/done.*\/trees\/app\/done.*TODO/,
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(rest).toHaveBeenCalledWith("/remove/preview", {
       method: "POST",
       body: { repo: "app", name: "done" },
     });
     expect(rest.mock.calls.some(([path]) => path === "/remove")).toBe(false);
-    expect(within(dialog).getByText(/TODO/)).toBeVisible();
     await userEvent.click(
-      screen.getByRole("button", { name: "Remove done@app" }),
+      screen.getByRole("button", { name: /^Remove done@app/ }),
     );
     await waitFor(() =>
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+      expect(
+        screen.queryByTitle(/Click again to delete/),
+      ).not.toBeInTheDocument(),
     );
     expect(rest).toHaveBeenCalledWith("/remove", {
       method: "POST",
@@ -459,7 +461,7 @@ describe("Timber desktop panel", () => {
       expect(
         screen.queryByText(
           (_, element) =>
-            element?.tagName === "STRONG" && element.textContent === "done@app",
+            element?.tagName === "DIV" && element.textContent === "done @ app",
         ),
       ).not.toBeInTheDocument(),
     );
@@ -481,11 +483,13 @@ describe("Timber desktop panel", () => {
       fireEvent.click(screen.getByRole("button", { name: "Remove done@app" }));
       await vi.advanceTimersByTimeAsync(1);
     });
-    expect(screen.getByRole("dialog")).toBeVisible();
+    expect(screen.getByTitle(/Click again to delete/)).toBeVisible();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(5000);
     });
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTitle(/Click again to delete/),
+    ).not.toBeInTheDocument();
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Remove done@app" }));
       await vi.advanceTimersByTimeAsync(1);
@@ -517,7 +521,9 @@ describe("Timber desktop panel", () => {
         warning: "Delete",
       });
     });
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTitle(/Click again to delete/),
+    ).not.toBeInTheDocument();
     expect(rest.mock.calls.some(([path]) => path === "/remove")).toBe(false);
   });
 
@@ -536,7 +542,7 @@ describe("Timber desktop panel", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Remove done@app" }),
     );
-    await screen.findByRole("dialog");
+    await screen.findByTitle(/Click again to delete/);
     await refresh();
     await waitFor(() =>
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
@@ -544,9 +550,11 @@ describe("Timber desktop panel", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Remove done@app" }),
     );
-    await screen.findByRole("dialog");
+    await screen.findByTitle(/Click again to delete/);
     act(() => host.state.gateway.set("closed"));
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTitle(/Click again to delete/),
+    ).not.toBeInTheDocument();
     act(() => host.state.gateway.set("open"));
     await waitFor(() =>
       expect(
@@ -556,7 +564,7 @@ describe("Timber desktop panel", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Remove done@app" }),
     );
-    await screen.findByRole("dialog");
+    await screen.findByTitle(/Click again to delete/);
     expect(rest.mock.calls.some(([path]) => path === "/remove")).toBe(false);
   });
 
@@ -568,7 +576,7 @@ describe("Timber desktop panel", () => {
     expect(
       screen.getByText(
         (_, element) =>
-          element?.tagName === "STRONG" && element.textContent === "done@app",
+          element?.tagName === "DIV" && element.textContent === "done @ app",
       ),
     ).toBeVisible();
     expect(await screen.findByRole("alert")).toHaveTextContent(
@@ -610,7 +618,7 @@ describe("Timber desktop panel", () => {
       await userEvent.click(
         screen.getByRole("button", { name: "Remove done@app" }),
       );
-      await screen.findByRole("dialog");
+      await screen.findByTitle(/Click again to delete/);
       const pending = deferred();
       rest.mockImplementation(() => pending.promise);
       act(() => {
@@ -619,11 +627,13 @@ describe("Timber desktop panel", () => {
           change === "profile" ? "work" : "default",
         );
       });
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(
+        screen.queryByTitle(/Click again to delete/),
+      ).not.toBeInTheDocument();
       expect(
         screen.queryByText(
           (_, element) =>
-            element?.tagName === "STRONG" && element.textContent === "done@app",
+            element?.tagName === "DIV" && element.textContent === "done @ app",
         ),
       ).not.toBeInTheDocument();
       expect(
@@ -659,7 +669,9 @@ describe("Timber desktop panel", () => {
         warning: "Delete",
       });
     });
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTitle(/Click again to delete/),
+    ).not.toBeInTheDocument();
     expect(rest.mock.calls.some(([path]) => path === "/remove")).toBe(false);
   });
 
@@ -702,7 +714,7 @@ describe("Timber desktop panel", () => {
       within(screen.getByRole("list", { name: "Worktrees" })).getAllByRole(
         "listitem",
       )[0],
-    ).toHaveTextContent("done@app");
+    ).toHaveTextContent("done @ app");
   });
 
   it("refuses to navigate when session.create does not confirm the requested cwd", async () => {
@@ -754,7 +766,7 @@ describe("Timber desktop panel", () => {
     expect(
       screen.queryByText(
         (_, element) =>
-          element?.tagName === "STRONG" && element.textContent === "done@app",
+          element?.tagName === "DIV" && element.textContent === "done @ app",
       ),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New worktree" })).toBeDisabled();

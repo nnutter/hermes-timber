@@ -122,12 +122,3 @@ export function responseWarnings(value: unknown): string[] {
 export function message(error: unknown): string {
   return error instanceof Error ? error.message : "The operation failed.";
 }
-
-export function fuzzyMatch(query: string, text: string): boolean {
-  let cursor = 0;
-  const needle = query.toLocaleLowerCase().trim();
-  for (const character of text.toLocaleLowerCase()) {
-    if (character === needle[cursor]) cursor++;
-  }
-  return cursor === needle.length;
-}
