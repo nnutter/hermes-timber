@@ -662,100 +662,123 @@ function ScopedPanel({
                       }
                     )
                   ] }),
-                  /* @__PURE__ */ jsxs("div", { style: row, children: [
-                    /* @__PURE__ */ jsx(
-                      Button,
-                      {
-                        type: "button",
-                        size: "xs",
-                        variant: "ghost",
-                        disabled,
-                        "aria-label": `Open ${worktree.name}@${worktree.repo} in Hermes`,
-                        title: "New session",
-                        onClick: () => {
-                          disarm();
-                          run(() => open(worktree));
-                        },
-                        children: /* @__PURE__ */ jsx(Codicon, { name: "add" })
-                      }
-                    ),
-                    /* @__PURE__ */ jsx(
-                      Badge,
-                      {
-                        variant: !worktree.clean ? "warn" : worktree.merged ? "success" : "muted",
-                        children: worktree.merged ? "Merged" : worktree.clean ? "Clean" : "Dirty"
-                      }
-                    ),
-                    worktree.statusError && /* @__PURE__ */ jsx(Badge, { variant: "destructive", children: "Status error" }),
-                    /* @__PURE__ */ jsxs("span", { style: { ...muted, marginLeft: 4 }, children: [
-                      "\u2191",
-                      worktree.ahead ?? 0,
-                      " \u2193",
-                      worktree.behind ?? 0
-                    ] }),
-                    worktree.todoTotal !== void 0 && /* @__PURE__ */ jsxs(
-                      "span",
-                      {
-                        style: {
-                          ...muted,
-                          marginLeft: 4,
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 4
-                        },
-                        "aria-label": `TODO ${worktree.todoDone ?? 0} of ${worktree.todoTotal} done`,
-                        children: [
-                          /* @__PURE__ */ jsx(Codicon, { name: "check-all" }),
-                          " ",
-                          worktree.todoDone ?? 0,
-                          "/",
-                          worktree.todoTotal
-                        ]
-                      }
-                    ),
-                    worktree.pullRequest && /* @__PURE__ */ jsxs("span", { style: muted, children: [
-                      "PR ",
-                      worktree.pullRequest
-                    ] }),
-                    /* @__PURE__ */ jsx(
-                      Button,
-                      {
-                        type: "button",
-                        size: "xs",
-                        variant: "ghost",
-                        style: {
-                          marginLeft: "auto",
-                          color: preview?.worktree.path === worktree.path ? "var(--ui-red)" : "var(--ui-text-quaternary)"
-                        },
-                        disabled: disabled || !safeToRemove(worktree),
-                        title: safeToRemove(worktree) ? preview?.worktree.path === worktree.path ? `Click again to delete ${preview.worktree.name}@${preview.worktree.repo}, branch ${preview.branch}, directory ${preview.worktree.path}, and worktree-local TODO notes within five seconds.` : "Preview removal" : "Requires clean, merged status without errors",
-                        "aria-label": preview?.worktree.path === worktree.path ? `Remove ${worktree.name}@${worktree.repo}. Click again to delete branch ${preview.branch}, directory ${preview.worktree.path}, and worktree-local TODO notes within five seconds.` : `Remove ${worktree.name}@${worktree.repo}`,
-                        onClick: () => {
-                          const armed = consent.current;
-                          if (armed && armed.worktree.repo === worktree.repo && armed.worktree.name === worktree.name && previewCurrent && Date.now() < consentDeadline.current && JSON.stringify(
-                            client.getQueryData(queryKey)?.worktrees.find(
-                              (item) => item.repo === worktree.repo && item.name === worktree.name
-                            )
-                          ) === consentSnapshot.current) {
-                            disarm();
-                            run(async () => {
-                              const result = await post("/remove", {
-                                token: armed.token
-                              });
-                              if (!record(result) || !result.removed)
-                                throw new Error("The backend did not confirm removal.");
-                              warnings(result);
-                              await refresh();
-                            });
-                          } else {
-                            disarm();
-                            run(() => prepareRemove(worktree));
+                  /* @__PURE__ */ jsxs(
+                    "div",
+                    {
+                      style: {
+                        display: "grid",
+                        gridTemplateColumns: "max-content 70px 80px 80px minmax(0, 1fr) max-content",
+                        alignItems: "center",
+                        columnGap: 10,
+                        overflowX: "auto"
+                      },
+                      children: [
+                        /* @__PURE__ */ jsx(
+                          Button,
+                          {
+                            type: "button",
+                            size: "xs",
+                            variant: "ghost",
+                            disabled,
+                            "aria-label": `Open ${worktree.name}@${worktree.repo} in Hermes`,
+                            title: "New session",
+                            onClick: () => {
+                              disarm();
+                              run(() => open(worktree));
+                            },
+                            children: /* @__PURE__ */ jsx(Codicon, { name: "add" })
                           }
-                        },
-                        children: /* @__PURE__ */ jsx(Codicon, { name: "trash" })
-                      }
-                    )
-                  ] }),
+                        ),
+                        /* @__PURE__ */ jsx("div", { style: { display: "flex", justifyContent: "center" }, children: /* @__PURE__ */ jsx(
+                          Badge,
+                          {
+                            variant: !worktree.clean ? "warn" : worktree.merged ? "success" : "muted",
+                            children: worktree.merged ? "Merged" : worktree.clean ? "Clean" : "Dirty"
+                          }
+                        ) }),
+                        /* @__PURE__ */ jsxs(
+                          "span",
+                          {
+                            style: { ...muted, textAlign: "center", whiteSpace: "nowrap" },
+                            children: [
+                              "\u2191",
+                              worktree.ahead ?? 0,
+                              " \u2193",
+                              worktree.behind ?? 0
+                            ]
+                          }
+                        ),
+                        /* @__PURE__ */ jsx(
+                          "span",
+                          {
+                            style: {
+                              display: "flex",
+                              justifyContent: "center",
+                              minWidth: 0
+                            },
+                            children: worktree.todoTotal !== void 0 && /* @__PURE__ */ jsxs(
+                              "span",
+                              {
+                                style: {
+                                  ...muted,
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 4
+                                },
+                                "aria-label": `TODO ${worktree.todoDone ?? 0} of ${worktree.todoTotal} done`,
+                                children: [
+                                  /* @__PURE__ */ jsx(Codicon, { name: "check-all" }),
+                                  " ",
+                                  worktree.todoDone ?? 0,
+                                  "/",
+                                  worktree.todoTotal
+                                ]
+                              }
+                            )
+                          }
+                        ),
+                        /* @__PURE__ */ jsx("span", { style: muted, children: worktree.pullRequest ? `PR ${worktree.pullRequest}` : "" }),
+                        /* @__PURE__ */ jsx(
+                          Button,
+                          {
+                            type: "button",
+                            size: "xs",
+                            variant: "ghost",
+                            style: {
+                              marginLeft: "auto",
+                              color: preview?.worktree.path === worktree.path ? "var(--ui-red)" : "var(--ui-text-quaternary)"
+                            },
+                            disabled: disabled || !safeToRemove(worktree),
+                            title: safeToRemove(worktree) ? preview?.worktree.path === worktree.path ? `Click again to delete ${preview.worktree.name}@${preview.worktree.repo}, branch ${preview.branch}, directory ${preview.worktree.path}, and worktree-local TODO notes within five seconds.` : "Preview removal" : "Requires clean, merged status without errors",
+                            "aria-label": preview?.worktree.path === worktree.path ? `Remove ${worktree.name}@${worktree.repo}. Click again to delete branch ${preview.branch}, directory ${preview.worktree.path}, and worktree-local TODO notes within five seconds.` : `Remove ${worktree.name}@${worktree.repo}`,
+                            onClick: () => {
+                              const armed = consent.current;
+                              if (armed && armed.worktree.repo === worktree.repo && armed.worktree.name === worktree.name && previewCurrent && Date.now() < consentDeadline.current && JSON.stringify(
+                                client.getQueryData(queryKey)?.worktrees.find(
+                                  (item) => item.repo === worktree.repo && item.name === worktree.name
+                                )
+                              ) === consentSnapshot.current) {
+                                disarm();
+                                run(async () => {
+                                  const result = await post("/remove", {
+                                    token: armed.token
+                                  });
+                                  if (!record(result) || !result.removed)
+                                    throw new Error("The backend did not confirm removal.");
+                                  warnings(result);
+                                  await refresh();
+                                });
+                              } else {
+                                disarm();
+                                run(() => prepareRemove(worktree));
+                              }
+                            },
+                            children: /* @__PURE__ */ jsx(Codicon, { name: "trash" })
+                          }
+                        )
+                      ]
+                    }
+                  ),
                   worktree.statusError && /* @__PURE__ */ jsx("p", { role: "status", style: muted, children: "Git status could not be read. Removal is disabled." })
                 ]
               },

@@ -633,7 +633,16 @@ function ScopedPanel({
                 {worktree.repo}
               </span>
             </div>
-            <div style={row}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  "max-content 70px 80px 80px minmax(0, 1fr) max-content",
+                alignItems: "center",
+                columnGap: 10,
+                overflowX: "auto",
+              }}
+            >
               <Button
                 type="button"
                 size="xs"
@@ -648,45 +657,53 @@ function ScopedPanel({
               >
                 <Codicon name="add" />
               </Button>
-              <Badge
-                variant={
-                  !worktree.clean
-                    ? "warn"
-                    : worktree.merged
-                      ? "success"
-                      : "muted"
-                }
+              <div style={{ display: "flex", justifyContent: "center" }}>
+                <Badge
+                  variant={
+                    !worktree.clean
+                      ? "warn"
+                      : worktree.merged
+                        ? "success"
+                        : "muted"
+                  }
+                >
+                  {worktree.merged
+                    ? "Merged"
+                    : worktree.clean
+                      ? "Clean"
+                      : "Dirty"}
+                </Badge>
+              </div>
+              <span
+                style={{ ...muted, textAlign: "center", whiteSpace: "nowrap" }}
               >
-                {worktree.merged
-                  ? "Merged"
-                  : worktree.clean
-                    ? "Clean"
-                    : "Dirty"}
-              </Badge>
-              {worktree.statusError && (
-                <Badge variant="destructive">Status error</Badge>
-              )}
-              <span style={{ ...muted, marginLeft: 4 }}>
                 ↑{worktree.ahead ?? 0} ↓{worktree.behind ?? 0}
               </span>
-              {worktree.todoTotal !== undefined && (
-                <span
-                  style={{
-                    ...muted,
-                    marginLeft: 4,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 4,
-                  }}
-                  aria-label={`TODO ${worktree.todoDone ?? 0} of ${worktree.todoTotal} done`}
-                >
-                  <Codicon name="check-all" /> {worktree.todoDone ?? 0}/
-                  {worktree.todoTotal}
-                </span>
-              )}
-              {worktree.pullRequest && (
-                <span style={muted}>PR {worktree.pullRequest}</span>
-              )}
+              <span
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  minWidth: 0,
+                }}
+              >
+                {worktree.todoTotal !== undefined && (
+                  <span
+                    style={{
+                      ...muted,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                    }}
+                    aria-label={`TODO ${worktree.todoDone ?? 0} of ${worktree.todoTotal} done`}
+                  >
+                    <Codicon name="check-all" /> {worktree.todoDone ?? 0}/
+                    {worktree.todoTotal}
+                  </span>
+                )}
+              </span>
+              <span style={muted}>
+                {worktree.pullRequest ? `PR ${worktree.pullRequest}` : ""}
+              </span>
               <Button
                 type="button"
                 size="xs"
