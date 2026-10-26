@@ -813,7 +813,7 @@ var plugin = {
       id: "hermes-timber.show",
       label: "Show Timber worktrees",
       category: "view",
-      defaults: ["ctrl+t"],
+      defaults: [],
       run: () => host3.revealPane("hermes-timber:panel")
     };
     context.register({ id: "shortcut", area: KEYBINDS_AREA, data: shortcut });
