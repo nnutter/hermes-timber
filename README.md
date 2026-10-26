@@ -70,6 +70,8 @@ Empty repository Projects remain available after cleanup.
 
 Cleanup removes both the worktree directory and its branch.
 The plugin permits cleanup only for clean, merged worktrees with a known status.
+Ignored files also block cleanup, even when Timber reports the worktree as clean.
+Sync preserves an existing checkout's folder when Timber omits the checkout, including detached worktrees.
 A confirmation applies to the exact previewed worktree state and expires.
 The backend checks the state again before removal and never uses `--force`.
 Do not use cleanup as a backup for local notes or commits.

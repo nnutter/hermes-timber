@@ -535,7 +535,7 @@ function ScopedPanel({
                     onChange: (event) => setStatus(event.target.value),
                     children: [
                       /* @__PURE__ */ jsx("option", { value: "all", children: "All statuses" }),
-                      /* @__PURE__ */ jsx("option", { value: "safe", children: "Safe to remove" }),
+                      /* @__PURE__ */ jsx("option", { value: "safe", children: "Clean and merged" }),
                       /* @__PURE__ */ jsx("option", { value: "dirty", children: "Dirty" }),
                       /* @__PURE__ */ jsx("option", { value: "error", children: "Status error" })
                     ]

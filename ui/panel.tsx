@@ -502,7 +502,7 @@ function ScopedPanel({
             onChange={(event) => setStatus(event.target.value)}
           >
             <option value="all">All statuses</option>
-            <option value="safe">Safe to remove</option>
+            <option value="safe">Clean and merged</option>
             <option value="dirty">Dirty</option>
             <option value="error">Status error</option>
           </select>

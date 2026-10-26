@@ -180,7 +180,9 @@ def test_approved_removal_keeps_project_and_rejects_replay(sandbox: Sandbox) -> 
 	)
 
 
-@pytest.mark.parametrize("change", ["untracked", "commit", "branch", "notes", "expired", "profile"])
+@pytest.mark.parametrize(
+	"change", ["untracked", "ignored", "commit", "branch", "notes", "expired", "profile"]
+)
 def test_approval_rechecks_real_snapshot(
 	sandbox: Sandbox, monkeypatch: pytest.MonkeyPatch, change: str
 ) -> None:
@@ -189,6 +191,10 @@ def test_approval_rechecks_real_snapshot(
 	path = Path(wt.path)
 	if change == "untracked":
 		(path / "unsaved.txt").write_text("keep me")
+	elif change == "ignored":
+		exclude = Path(command("git", "rev-parse", "--git-path", "info/exclude", cwd=path))
+		exclude.write_text("secret.env\n")
+		(path / "secret.env").write_text("keep ignored data")
 	elif change == "commit":
 		command(
 			"git",
@@ -217,6 +223,33 @@ def test_approval_rechecks_real_snapshot(
 	response = sandbox.client.post("/remove", json={"token": token})
 	assert response.status_code in (404, 409), response.text
 	assert path.is_dir()
+
+
+def test_ignored_files_block_cleanup_preview(sandbox: Sandbox) -> None:
+	wt = sandbox.create("ignored-data")
+	path = Path(wt.path)
+	exclude = Path(command("git", "rev-parse", "--git-path", "info/exclude", cwd=path))
+	exclude.write_text("secret.env\n")
+	secret = path / "secret.env"
+	secret.write_text("keep ignored data")
+	response = sandbox.client.post("/remove/preview", json={"repo": wt.repo, "name": wt.name})
+	assert response.status_code == 409, response.text
+	assert secret.read_text() == "keep ignored data"
+
+
+def test_sync_preserves_detached_worktree_folder(sandbox: Sandbox) -> None:
+	wt = sandbox.create("detached")
+	pid = sandbox.state().projects[wt.repo]
+	path = Path(wt.path)
+	command("git", "checkout", "--detach", cwd=path)
+	assert sandbox.state().worktrees == []
+	response = sandbox.client.post("/sync", json={})
+	assert response.status_code == 200, response.text
+	with contextlib.closing(projects_db.connect()) as db:
+		project = projects_db.get_project(db, pid)
+		assert project is not None and [folder.path for folder in project.folders] == [wt.path]
+	assert path.is_dir()
+	assert api.State.model_validate(response.json()).warnings
 
 
 def test_dirty_and_unmerged_cleanup_refused(sandbox: Sandbox) -> None:

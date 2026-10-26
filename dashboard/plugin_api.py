@@ -331,6 +331,23 @@ def reconcile(
 			for path, fp in owned.items():
 				folder = folders.get(path)
 				if path not in paths:
+					# Timber excludes detached worktrees. Missing from its list does
+					# not prove that the checkout disappeared. lstat also preserves
+					# symlinks and refuses to infer absence from permission errors.
+					try:
+						Path(path).lstat()
+					except FileNotFoundError:
+						pass
+					except OSError:
+						warnings.append(
+							f"{repo}: cannot verify missing checkout; folder preserved: {path}"
+						)
+						continue
+					else:
+						warnings.append(
+							f"{repo}: checkout still exists outside Timber listing; folder preserved: {path}"
+						)
+						continue
 					if (
 						folder is not None
 						and fingerprint(
@@ -463,12 +480,12 @@ def snapshot(wt: Worktree) -> Snapshot:
 	if home().is_relative_to(path.resolve()):
 		raise HTTPException(409, "Worktree contains the active Hermes profile; removal refused")
 	git = functools.partial(checked, cwd=path)
-	status = git(["git", "status", "--porcelain=v1", "--untracked-files=all"])
+	status = git(["git", "status", "--porcelain=v1", "--untracked-files=all", "--ignored"])
 	branch = git(["git", "symbolic-ref", "--quiet", "--short", "HEAD"]).strip()
 	commit = git(["git", "rev-parse", "HEAD"]).strip()
 	git_dir = git(["git", "rev-parse", "--absolute-git-dir"]).strip()
 	if status:
-		raise HTTPException(409, "Worktree has modified or untracked files")
+		raise HTTPException(409, "Worktree has modified, untracked, or ignored files")
 	if commit != wt.commit:
 		raise HTTPException(409, "Commit changed during inspection; refresh and retry")
 	common_dir = git(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"]).strip()
