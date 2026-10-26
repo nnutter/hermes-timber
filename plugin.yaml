@@ -1,0 +1,4 @@
+name: hermes-timber
+version: 0.1.0
+description: Manage Timber worktrees and repository-level Hermes Projects.
+author: nnutter
