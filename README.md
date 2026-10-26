@@ -68,6 +68,13 @@ Listing worktrees does not create or modify Projects.
 The plugin records the folder associations it creates and preserves associations that it does not own.
 Empty repository Projects remain available after cleanup.
 
+Successful reads poll every 15 seconds.
+Read failures back off to 30, 60, 120, 240, and then 300 seconds, with the delay reset after success.
+HTTP 401 or 403 and recognized sign-in failures pause automatic requests instead of retrying.
+Sign in through Hermes Connections, then select **Retry after sign-in** to resume reads.
+A WebSocket reconnect alone does not clear this pause because REST and WebSocket authentication can differ.
+Create, remove, and sync operations never retry automatically, including after sign-in.
+
 Cleanup removes both the worktree directory and its branch.
 The plugin permits cleanup only for clean, merged worktrees with a known status.
 Ignored files also block cleanup, even when Timber reports the worktree as clean.

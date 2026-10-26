@@ -21,6 +21,7 @@ import {
   safeToRemove,
 } from "./contracts";
 import type { RemovePreview, Worktree } from "./contracts";
+import { authenticationFailure, pollDelay } from "./polling";
 import { assertScope, scopeKey, useScope } from "./scope";
 
 const stack: CSSProperties = {
@@ -82,16 +83,35 @@ function ScopedPanel({
   }, []);
   const current = () => alive.current && scopeKey() === scope;
   const queryKey = ["hermes-timber", scope, "state"] as const;
+  const consecutiveFailures = useRef(0);
+  const [authenticationRequired, setAuthenticationRequired] = useState(() =>
+    authenticationFailure(client.getQueryState(queryKey)?.error),
+  );
+  const pauseForAuthentication = (failure: unknown) => {
+    if (current() && authenticationFailure(failure))
+      setAuthenticationRequired(true);
+  };
   const listing = useQuery({
     queryKey,
     queryFn: async () => {
       assertScope(scope);
-      const result = parseState(await context.rest<unknown>("/state"));
-      assertScope(scope);
-      return result;
+      try {
+        const result = parseState(await context.rest<unknown>("/state"));
+        assertScope(scope);
+        consecutiveFailures.current = 0;
+        setAuthenticationRequired(false);
+        return result;
+      } catch (failure) {
+        consecutiveFailures.current++;
+        pauseForAuthentication(failure);
+        throw failure;
+      }
     },
-    enabled: online,
-    refetchInterval: 15_000,
+    enabled: online && !authenticationRequired,
+    refetchInterval: () =>
+      authenticationRequired ? false : pollDelay(consecutiveFailures.current),
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     retry: false,
     staleTime: 10_000,
   });
@@ -108,11 +128,13 @@ function ScopedPanel({
   const [error, setError] = useState<string | null>(null);
   const [recent, setRecent] = useState<Record<string, number>>({});
   const data = listing.data;
-  const ready = online && Boolean(data) && !listing.isError;
+  const ready =
+    online && !authenticationRequired && Boolean(data) && !listing.isError;
 
   const check = () => {
     assertScope(scope);
     if (
+      authenticationRequired ||
       !alive.current ||
       client.getQueryState(queryKey)?.status !== "success"
     ) {
@@ -141,6 +163,7 @@ function ScopedPanel({
 
   const operation = useMutation({
     mutationKey: ["hermes-timber", scope, "operation"],
+    retry: false,
     mutationFn: async (run: () => Promise<void>) => {
       check();
       await run();
@@ -151,6 +174,7 @@ function ScopedPanel({
     },
     onError: (failure) => {
       if (current()) {
+        pauseForAuthentication(failure);
         setError(message(failure));
         setPreview(null);
       }
@@ -319,7 +343,13 @@ function ScopedPanel({
         <div style={{ ...row, justifyContent: "space-between" }}>
           <strong>Timber</strong>
           <Badge variant={ready ? "muted" : "warn"}>
-            {online ? (listing.isError ? "Stale" : "Connected") : "Offline"}
+            {!online
+              ? "Offline"
+              : authenticationRequired
+                ? "Sign-in required"
+                : listing.isError
+                  ? "Stale"
+                  : "Connected"}
           </Badge>
         </div>
         {data && (
@@ -368,7 +398,7 @@ function ScopedPanel({
               });
             }}
           >
-            Refresh
+            {authenticationRequired ? "Retry after sign-in" : "Refresh"}
           </Button>
         </div>
       </header>
@@ -378,14 +408,21 @@ function ScopedPanel({
         </p>
       )}
       {listing.isPending && online && <p role="status">Loading worktrees…</p>}
-      {listing.isError && (
+      {authenticationRequired && (
+        <p role="alert">
+          Gateway sign-in or permission is required. Automatic requests are
+          paused. Sign in through Hermes Connections, then select Retry after
+          sign-in. Cached results are stale and actions are disabled.
+        </p>
+      )}
+      {listing.isError && !authenticationRequired && (
         <p role="alert">
           {data ? "Cached results are stale. " : "Cannot load Timber. "}
           {message(listing.error)} Actions are disabled until a successful
           refresh.
         </p>
       )}
-      {error && <p role="alert">{error}</p>}
+      {error && !authenticationRequired && <p role="alert">{error}</p>}
       {notice.length > 0 && (
         <div role="status">
           {notice.map((text, index) => (

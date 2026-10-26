@@ -77,6 +77,26 @@ function fuzzyMatch(query, text) {
   return cursor === needle.length;
 }
 
+// ui/polling.ts
+var NORMAL_POLL_MS = 15e3;
+var MAX_POLL_MS = 3e5;
+function pollDelay(consecutiveFailures) {
+  return Math.min(
+    NORMAL_POLL_MS * 2 ** Math.min(consecutiveFailures, 5),
+    MAX_POLL_MS
+  );
+}
+function authenticationFailure(error) {
+  if (record(error)) {
+    const status = error.status ?? error.statusCode;
+    if (status === 401 || status === 403) return true;
+  }
+  const text = error instanceof Error ? error.message : String(error ?? "");
+  return /\b(?:401|403)(?=[:\s]|$)|\bno_cookie\b|\bunauthenticated\b|silent sign-in for this gateway failed|OAuth session partition is unavailable/i.test(
+    text
+  );
+}
+
 // ui/scope.ts
 import { useSyncExternalStore } from "react";
 import { gatewayActivationEpoch, host } from "@hermes/plugin-sdk";
@@ -166,16 +186,34 @@ function ScopedPanel({
   }, []);
   const current = () => alive.current && scopeKey() === scope;
   const queryKey = ["hermes-timber", scope, "state"];
+  const consecutiveFailures = useRef(0);
+  const [authenticationRequired, setAuthenticationRequired] = useState(
+    () => authenticationFailure(client.getQueryState(queryKey)?.error)
+  );
+  const pauseForAuthentication = (failure) => {
+    if (current() && authenticationFailure(failure))
+      setAuthenticationRequired(true);
+  };
   const listing = useQuery({
     queryKey,
     queryFn: async () => {
       assertScope(scope);
-      const result = parseState(await context.rest("/state"));
-      assertScope(scope);
-      return result;
+      try {
+        const result = parseState(await context.rest("/state"));
+        assertScope(scope);
+        consecutiveFailures.current = 0;
+        setAuthenticationRequired(false);
+        return result;
+      } catch (failure) {
+        consecutiveFailures.current++;
+        pauseForAuthentication(failure);
+        throw failure;
+      }
     },
-    enabled: online,
-    refetchInterval: 15e3,
+    enabled: online && !authenticationRequired,
+    refetchInterval: () => authenticationRequired ? false : pollDelay(consecutiveFailures.current),
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     retry: false,
     staleTime: 1e4
   });
@@ -192,10 +230,10 @@ function ScopedPanel({
   const [error, setError] = useState(null);
   const [recent, setRecent] = useState({});
   const data = listing.data;
-  const ready = online && Boolean(data) && !listing.isError;
+  const ready = online && !authenticationRequired && Boolean(data) && !listing.isError;
   const check = () => {
     assertScope(scope);
-    if (!alive.current || client.getQueryState(queryKey)?.status !== "success") {
+    if (authenticationRequired || !alive.current || client.getQueryState(queryKey)?.status !== "success") {
       throw new Error(
         "The listing is stale. Refresh Timber before continuing."
       );
@@ -218,6 +256,7 @@ function ScopedPanel({
   };
   const operation = useMutation({
     mutationKey: ["hermes-timber", scope, "operation"],
+    retry: false,
     mutationFn: async (run2) => {
       check();
       await run2();
@@ -228,6 +267,7 @@ function ScopedPanel({
     },
     onError: (failure) => {
       if (current()) {
+        pauseForAuthentication(failure);
         setError(message(failure));
         setPreview(null);
       }
@@ -356,7 +396,7 @@ function ScopedPanel({
         /* @__PURE__ */ jsxs("header", { style: stack, children: [
           /* @__PURE__ */ jsxs("div", { style: { ...row, justifyContent: "space-between" }, children: [
             /* @__PURE__ */ jsx("strong", { children: "Timber" }),
-            /* @__PURE__ */ jsx(Badge, { variant: ready ? "muted" : "warn", children: online ? listing.isError ? "Stale" : "Connected" : "Offline" })
+            /* @__PURE__ */ jsx(Badge, { variant: ready ? "muted" : "warn", children: !online ? "Offline" : authenticationRequired ? "Sign-in required" : listing.isError ? "Stale" : "Connected" })
           ] }),
           data && /* @__PURE__ */ jsxs("div", { style: muted, children: [
             data.host,
@@ -407,19 +447,20 @@ function ScopedPanel({
                     if (current()) setError(message(failure));
                   });
                 },
-                children: "Refresh"
+                children: authenticationRequired ? "Retry after sign-in" : "Refresh"
               }
             )
           ] })
         ] }),
         !online && /* @__PURE__ */ jsx("p", { role: "status", children: "Gateway offline. Cached results are stale. Actions are disabled." }),
         listing.isPending && online && /* @__PURE__ */ jsx("p", { role: "status", children: "Loading worktrees\u2026" }),
-        listing.isError && /* @__PURE__ */ jsxs("p", { role: "alert", children: [
+        authenticationRequired && /* @__PURE__ */ jsx("p", { role: "alert", children: "Gateway sign-in or permission is required. Automatic requests are paused. Sign in through Hermes Connections, then select Retry after sign-in. Cached results are stale and actions are disabled." }),
+        listing.isError && !authenticationRequired && /* @__PURE__ */ jsxs("p", { role: "alert", children: [
           data ? "Cached results are stale. " : "Cannot load Timber. ",
           message(listing.error),
           " Actions are disabled until a successful refresh."
         ] }),
-        error && /* @__PURE__ */ jsx("p", { role: "alert", children: error }),
+        error && !authenticationRequired && /* @__PURE__ */ jsx("p", { role: "alert", children: error }),
         notice.length > 0 && /* @__PURE__ */ jsx("div", { role: "status", children: notice.map((text, index) => /* @__PURE__ */ jsx("p", { children: text }, index)) }),
         data?.warnings.length ? /* @__PURE__ */ jsx("div", { "aria-label": "Backend warnings", children: data.warnings.map((text, index) => /* @__PURE__ */ jsx("p", { style: muted, children: text }, index)) }) : null,
         creating && /* @__PURE__ */ jsxs(

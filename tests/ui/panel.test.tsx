@@ -78,9 +78,12 @@ const context: PluginContext = {
 };
 let client: QueryClient;
 
-function mount() {
+function mount(mutationRetries = 0) {
   client = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: mutationRetries, retryDelay: 1 },
+    },
   });
   return render(
     <StrictMode>
@@ -114,9 +117,128 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   client?.clear();
+  vi.useRealTimers();
 });
 
 describe("Timber desktop panel", () => {
+  it.each([401, 403])(
+    "pauses automatic reads after HTTP %i until explicit retry",
+    async (status) => {
+      vi.useFakeTimers();
+      mount();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+      });
+      expect(screen.getByText("done@app")).toBeVisible();
+      rest.mockRejectedValue(new Error(`${status}: {"reason":"no_cookie"}`));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(15_000);
+      });
+      expect(rest).toHaveBeenCalledTimes(2);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(600_000);
+      });
+      expect(rest).toHaveBeenCalledTimes(2);
+      await act(async () => {
+        host.state.gateway.set("closed");
+        host.state.gateway.set("open");
+        await vi.advanceTimersByTimeAsync(60_000);
+      });
+      expect(rest).toHaveBeenCalledTimes(2);
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Automatic requests are paused",
+      );
+      expect(
+        screen.getByRole("button", { name: "Sync Projects" }),
+      ).toBeDisabled();
+      rest.mockResolvedValue(state);
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole("button", { name: "Retry after sign-in" }),
+        );
+        await vi.advanceTimersByTimeAsync(1);
+      });
+      expect(rest).toHaveBeenCalledTimes(3);
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(15_000);
+      });
+      expect(rest).toHaveBeenCalledTimes(4);
+    },
+  );
+
+  it("backs off failed reads exponentially to a cap and resets after recovery", async () => {
+    vi.useFakeTimers();
+    rest.mockRejectedValue(new Error("503: gateway unavailable"));
+    mount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(rest).toHaveBeenCalledTimes(1);
+    let attempts = 1;
+    for (const delay of [30_000, 60_000, 120_000, 240_000, 300_000, 300_000]) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(delay - 1);
+      });
+      expect(rest).toHaveBeenCalledTimes(attempts);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+      });
+      attempts++;
+      expect(rest).toHaveBeenCalledTimes(attempts);
+    }
+    rest.mockResolvedValue(state);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300_000);
+    });
+    expect(rest).toHaveBeenCalledTimes(attempts + 1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(14_999);
+    });
+    expect(rest).toHaveBeenCalledTimes(attempts + 1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(rest).toHaveBeenCalledTimes(attempts + 2);
+  });
+
+  it("pauses after mutation auth failure without replaying the mutation", async () => {
+    vi.useFakeTimers();
+    rest
+      .mockResolvedValueOnce(state)
+      .mockRejectedValue(
+        Object.assign(new Error("Access denied"), { statusCode: 401 }),
+      );
+    mount(3);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Sync Projects" }));
+      await vi.advanceTimersByTimeAsync(600_000);
+    });
+    expect(rest.mock.calls.filter(([path]) => path === "/sync")).toHaveLength(
+      1,
+    );
+    expect(rest.mock.calls.filter(([path]) => path === "/state")).toHaveLength(
+      1,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Automatic requests are paused",
+    );
+    rest.mockResolvedValue(state);
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: "Retry after sign-in" }),
+      );
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(rest.mock.calls.filter(([path]) => path === "/sync")).toHaveLength(
+      1,
+    );
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("rejects unknown worktree status instead of enabling cleanup", async () => {
     const { statusError: _unknownStatus, ...unknownStatus } = clean;
     rest.mockResolvedValue({ ...state, worktrees: [unknownStatus] });
