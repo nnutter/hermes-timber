@@ -396,15 +396,39 @@ function ScopedPanel({
       <header style={stack}>
         <div style={{ ...row, justifyContent: "space-between" }}>
           <strong>Timber</strong>
-          <Badge variant={ready ? "muted" : "warn"}>
-            {!online
-              ? "Offline"
-              : authenticationRequired
-                ? "Sign-in required"
-                : listing.isError
-                  ? "Stale"
-                  : "Connected"}
-          </Badge>
+          <div style={row}>
+            <Badge variant={ready ? "muted" : "warn"}>
+              {!online
+                ? "Offline"
+                : authenticationRequired
+                  ? "Sign-in required"
+                  : listing.isError
+                    ? "Stale"
+                    : "Connected"}
+            </Badge>
+            <Button
+              type="button"
+              size="xs"
+              variant="ghost"
+              disabled={!online || busy || listing.isFetching}
+              aria-label={
+                authenticationRequired ? "Retry after sign-in" : "Refresh"
+              }
+              title={
+                authenticationRequired
+                  ? "Retry after sign-in"
+                  : "Reload worktrees"
+              }
+              onClick={() => {
+                setError(null);
+                void refresh().catch((failure: unknown) => {
+                  if (current()) setError(message(failure));
+                });
+              }}
+            >
+              <Codicon name="refresh" />
+            </Button>
+          </div>
         </div>
         {data && (
           <div style={muted}>
@@ -440,20 +464,6 @@ function ScopedPanel({
             }}
           >
             Sync Projects
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            disabled={!online || busy || listing.isFetching}
-            onClick={() => {
-              setError(null);
-              void refresh().catch((failure: unknown) => {
-                if (current()) setError(message(failure));
-              });
-            }}
-          >
-            {authenticationRequired ? "Retry after sign-in" : "Refresh"}
           </Button>
         </div>
       </header>

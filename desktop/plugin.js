@@ -441,7 +441,27 @@ function ScopedPanel({
         /* @__PURE__ */ jsxs("header", { style: stack, children: [
           /* @__PURE__ */ jsxs("div", { style: { ...row, justifyContent: "space-between" }, children: [
             /* @__PURE__ */ jsx("strong", { children: "Timber" }),
-            /* @__PURE__ */ jsx(Badge, { variant: ready ? "muted" : "warn", children: !online ? "Offline" : authenticationRequired ? "Sign-in required" : listing.isError ? "Stale" : "Connected" })
+            /* @__PURE__ */ jsxs("div", { style: row, children: [
+              /* @__PURE__ */ jsx(Badge, { variant: ready ? "muted" : "warn", children: !online ? "Offline" : authenticationRequired ? "Sign-in required" : listing.isError ? "Stale" : "Connected" }),
+              /* @__PURE__ */ jsx(
+                Button,
+                {
+                  type: "button",
+                  size: "xs",
+                  variant: "ghost",
+                  disabled: !online || busy || listing.isFetching,
+                  "aria-label": authenticationRequired ? "Retry after sign-in" : "Refresh",
+                  title: authenticationRequired ? "Retry after sign-in" : "Reload worktrees",
+                  onClick: () => {
+                    setError(null);
+                    void refresh().catch((failure) => {
+                      if (current()) setError(message(failure));
+                    });
+                  },
+                  children: /* @__PURE__ */ jsx(Codicon, { name: "refresh" })
+                }
+              )
+            ] })
           ] }),
           data && /* @__PURE__ */ jsxs("div", { style: muted, children: [
             data.host,
@@ -480,22 +500,6 @@ function ScopedPanel({
                   });
                 },
                 children: "Sync Projects"
-              }
-            ),
-            /* @__PURE__ */ jsx(
-              Button,
-              {
-                type: "button",
-                size: "sm",
-                variant: "ghost",
-                disabled: !online || busy || listing.isFetching,
-                onClick: () => {
-                  setError(null);
-                  void refresh().catch((failure) => {
-                    if (current()) setError(message(failure));
-                  });
-                },
-                children: authenticationRequired ? "Retry after sign-in" : "Refresh"
               }
             )
           ] })
