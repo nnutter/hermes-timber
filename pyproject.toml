@@ -1,0 +1,37 @@
+[project]
+name = "hermes-timber"
+version = "0.1.0"
+description = "Timber worktrees and repository-level Projects in Hermes Desktop"
+requires-python = ">=3.13"
+dependencies = []
+
+[dependency-groups]
+dev = [
+  "fastapi>=0.115,<1",
+  "httpx>=0.28,<1",
+  "invoke>=2.2,<3",
+  "pytest>=8,<10",
+  "ruff>=0.14,<1",
+  "ty>=0.0.1",
+]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.format]
+indent-style = "tab"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ANN"]
+ignore = ["E501"]
+
+[tool.ty.environment]
+extra-paths = ["typings"]
+
+[tool.ty.rules]
+all = "error"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
