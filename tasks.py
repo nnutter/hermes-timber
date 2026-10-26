@@ -53,6 +53,7 @@ def package(_context: Context) -> None:
 	target = ROOT / "dist" / "hermes-timber.zip"
 	target.parent.mkdir(exist_ok=True)
 	files = [
+		"__init__.py",
 		"plugin.yaml",
 		"dashboard/manifest.json",
 		"dashboard/plugin_api.py",
