@@ -1,5 +1,5 @@
 // ui/plugin.tsx
-import { host as host3, PALETTE_AREA } from "@hermes/plugin-sdk";
+import { host as host3, KEYBINDS_AREA, PALETTE_AREA } from "@hermes/plugin-sdk";
 
 // ui/panel.tsx
 import { useEffect, useRef, useState } from "react";
@@ -809,6 +809,14 @@ var plugin = {
       data: { placement: "right", width: "400px" },
       render: () => /* @__PURE__ */ jsx2(TimberPanel, { context })
     });
+    const shortcut = {
+      id: "hermes-timber.show",
+      label: "Show Timber worktrees",
+      category: "view",
+      defaults: ["mod+alt+shift+t"],
+      run: () => host3.revealPane("hermes-timber:panel")
+    };
+    context.register({ id: "shortcut", area: KEYBINDS_AREA, data: shortcut });
     const command = {
       id: "show-timber",
       label: "Show Timber worktrees",

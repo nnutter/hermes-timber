@@ -34,6 +34,14 @@ declare module "@hermes/plugin-sdk" {
     run: () => void;
   }
   export const PALETTE_AREA: "palette";
+  export const KEYBINDS_AREA: "keybinds";
+  export interface KeybindContribution {
+    id: string;
+    label: string;
+    category?: "view";
+    defaults?: readonly string[];
+    run: () => void;
+  }
   export function gatewayActivationEpoch(): number;
   export const host: {
     state: {

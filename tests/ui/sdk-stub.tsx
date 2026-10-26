@@ -43,6 +43,7 @@ export function resetHost() {
   host.openSession.mockReset();
 }
 export const PALETTE_AREA = "palette";
+export const KEYBINDS_AREA = "keybinds";
 export function Button({
   variant: _variant,
   size: _size,

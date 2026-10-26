@@ -1,5 +1,9 @@
-import { host, PALETTE_AREA } from "@hermes/plugin-sdk";
-import type { HermesPlugin, PaletteContribution } from "@hermes/plugin-sdk";
+import { host, KEYBINDS_AREA, PALETTE_AREA } from "@hermes/plugin-sdk";
+import type {
+  HermesPlugin,
+  KeybindContribution,
+  PaletteContribution,
+} from "@hermes/plugin-sdk";
 import { TimberPanel } from "./panel";
 
 const plugin: HermesPlugin = {
@@ -15,6 +19,14 @@ const plugin: HermesPlugin = {
       data: { placement: "right", width: "400px" },
       render: () => <TimberPanel context={context} />,
     });
+    const shortcut: KeybindContribution = {
+      id: "hermes-timber.show",
+      label: "Show Timber worktrees",
+      category: "view",
+      defaults: ["mod+alt+shift+t"],
+      run: () => host.revealPane("hermes-timber:panel"),
+    };
+    context.register({ id: "shortcut", area: KEYBINDS_AREA, data: shortcut });
     const command: PaletteContribution = {
       id: "show-timber",
       label: "Show Timber worktrees",

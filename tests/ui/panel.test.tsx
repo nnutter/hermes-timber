@@ -797,6 +797,25 @@ describe("Timber desktop panel", () => {
     expect(screen.getByRole("button", { name: "New worktree" })).toBeDisabled();
   });
 
+  it("registers a rebindable shortcut to reveal Timber", () => {
+    plugin.register(context);
+    const keybind = register.mock.calls
+      .map(([contribution]) => contribution)
+      .find((item) => item.area === "keybinds");
+    const binding = keybind?.data;
+    if (
+      typeof binding !== "object" ||
+      binding === null ||
+      !("run" in binding) ||
+      typeof binding.run !== "function" ||
+      !("defaults" in binding)
+    )
+      throw new Error("No keybind");
+    expect(binding.defaults).toEqual(["mod+alt+shift+t"]);
+    binding.run();
+    expect(host.revealPane).toHaveBeenCalledWith("hermes-timber:panel");
+  });
+
   it("registers a native pane and a command that reveals that exact pane", () => {
     plugin.register(context);
     const pane = register.mock.calls
