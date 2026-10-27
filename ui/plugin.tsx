@@ -44,7 +44,7 @@ const plugin: HermesPlugin = {
     context.register({ id: command.id, area: PALETTE_AREA, data: command });
     const sync: PaletteContribution = {
       id: "sync-projects",
-      label: "Sync Projects",
+      label: "Timber: Sync Projects",
       keywords: ["timber", "worktree", "repository"],
       run: () => {
         if (syncing) return;
