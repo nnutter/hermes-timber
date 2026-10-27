@@ -154,10 +154,54 @@ describe("Timber desktop panel", () => {
         body: { source: "/tmp/origin", name: "new/repo", alias: "short" },
       }),
     );
-    await screen.findByText("Completed.");
+    const indicator = await screen.findByRole("status", {
+      name: "Repository added",
+    });
+    expect(
+      screen.getByRole("button", { name: "Add repository" }).nextElementSibling,
+    ).toBe(indicator);
+    expect(screen.queryByText("Completed.")).not.toBeInTheDocument();
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    expect(indicator).toBeVisible();
+    await waitFor(() => expect(indicator).not.toBeInTheDocument(), {
+      timeout: 1500,
+    });
     expect(
       rest.mock.calls.filter(([path]) => path === "/state").length,
     ).toBeGreaterThan(1);
+  });
+
+  it("retains add warnings and restarts the success timer on another add", async () => {
+    rest.mockImplementation(async (path) =>
+      path === "/repositories"
+        ? { repository: "new", warnings: ["Project sync failed"] }
+        : state,
+    );
+    mount();
+    const user = userEvent.setup();
+    await loaded();
+    const add = async () => {
+      await user.click(screen.getByRole("button", { name: "Add repository" }));
+      await user.type(screen.getByLabelText("Repository URL or path"), "/repo");
+      await user.click(screen.getByRole("button", { name: "Add repo" }));
+      await screen.findByRole("status", { name: "Repository added" });
+    };
+    await add();
+    expect(screen.getByText("Project sync failed")).toBeVisible();
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    await add();
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    expect(
+      screen.getByRole("status", { name: "Repository added" }),
+    ).toBeVisible();
+    await waitFor(
+      () =>
+        expect(
+          screen.queryByRole("status", { name: "Repository added" }),
+        ).not.toBeInTheDocument(),
+      { timeout: 1500 },
+    );
+    expect(screen.getByText("Project sync failed")).toBeVisible();
   });
 
   it("reports a missing repository endpoint and recovers unrelated actions without replay", async () => {
@@ -180,6 +224,9 @@ describe("Timber desktop panel", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "backend may be outdated",
     );
+    expect(
+      screen.queryByRole("status", { name: "Repository added" }),
+    ).not.toBeInTheDocument();
     await waitFor(() =>
       expect(
         screen.getByRole("button", { name: "New worktree" }),

@@ -140,6 +140,14 @@ function ScopedPanel({
   const [sort, setSort] = useState("recent");
   const [creating, setCreating] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [added, setAdded] = useState(false);
+  const addedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (addedTimer.current !== null) clearTimeout(addedTimer.current);
+    },
+    [],
+  );
   const [source, setSource] = useState("");
   const [repoName, setRepoName] = useState("");
   const [alias, setAlias] = useState("");
@@ -372,6 +380,8 @@ function ScopedPanel({
     event.preventDefault();
     disarm();
     run(async () => {
+      if (addedTimer.current !== null) clearTimeout(addedTimer.current);
+      setAdded(false);
       const response = await post("/repositories", {
         source,
         name: repoName,
@@ -385,7 +395,7 @@ function ScopedPanel({
         throw new Error(
           "The backend did not confirm repository addition. Refresh before retrying.",
         );
-      warnings(response);
+      if (current()) setNotice(responseWarnings(response));
       if (current()) {
         setAdding(false);
         setSource("");
@@ -393,6 +403,10 @@ function ScopedPanel({
         setAlias("");
       }
       await refresh();
+      if (current()) {
+        setAdded(true);
+        addedTimer.current = setTimeout(() => setAdded(false), 2000);
+      }
     }, "add");
   }
 
@@ -534,6 +548,16 @@ function ScopedPanel({
           >
             Add repository
           </Button>
+          {added && (
+            <span
+              role="status"
+              aria-label="Repository added"
+              title="Repository added"
+              style={{ color: "#22c55e" }}
+            >
+              <Codicon name="check" />
+            </span>
+          )}
         </div>
       </header>
       {!online && (
