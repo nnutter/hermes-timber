@@ -27,7 +27,8 @@ import type { PluginContext } from "@hermes/plugin-sdk";
 import { TimberPanel } from "../../ui/panel";
 import plugin from "../../ui/plugin";
 import type { TimberState, Worktree } from "../../ui/contracts";
-import { host, resetHost, switchScope } from "./sdk-stub";
+import { host, queryClient, resetHost, switchScope } from "./sdk-stub";
+import { scopeKey } from "../../ui/scope";
 
 const clean: Worktree = {
   name: "done",
@@ -217,7 +218,7 @@ describe("Timber desktop panel", () => {
         "Automatic requests are paused",
       );
       expect(
-        screen.getByRole("button", { name: "Sync Projects" }),
+        screen.getByRole("button", { name: "Add repository" }),
       ).toBeDisabled();
       rest.mockResolvedValue(state);
       await act(async () => {
@@ -282,10 +283,12 @@ describe("Timber desktop panel", () => {
       await vi.advanceTimersByTimeAsync(1);
     });
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Sync Projects" }));
+      fireEvent.click(screen.getByRole("button", { name: "New worktree" }));
+      await vi.advanceTimersByTimeAsync(1);
+      fireEvent.click(screen.getByRole("button", { name: "Create worktree" }));
       await vi.advanceTimersByTimeAsync(600_000);
     });
-    expect(rest.mock.calls.filter(([path]) => path === "/sync")).toHaveLength(
+    expect(rest.mock.calls.filter(([path]) => path === "/create")).toHaveLength(
       1,
     );
     expect(rest.mock.calls.filter(([path]) => path === "/state")).toHaveLength(
@@ -301,7 +304,7 @@ describe("Timber desktop panel", () => {
       );
       await vi.advanceTimersByTimeAsync(1);
     });
-    expect(rest.mock.calls.filter(([path]) => path === "/sync")).toHaveLength(
+    expect(rest.mock.calls.filter(([path]) => path === "/create")).toHaveLength(
       1,
     );
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
@@ -318,7 +321,7 @@ describe("Timber desktop panel", () => {
       screen.queryByRole("button", { name: "Remove done@app" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Sync Projects" }),
+      screen.getByRole("button", { name: "Add repository" }),
     ).toBeDisabled();
   });
 
@@ -438,7 +441,7 @@ describe("Timber desktop panel", () => {
       screen.getByRole("button", { name: "Create worktree" }),
     ).toBeDisabled();
     expect(
-      screen.getByRole("button", { name: "Sync Projects" }),
+      screen.getByRole("button", { name: "Add repository" }),
     ).toBeDisabled();
     rest.mockResolvedValue(state);
     await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
@@ -449,24 +452,94 @@ describe("Timber desktop panel", () => {
     );
   });
 
-  it("only reconciles Projects through the explicit Sync Projects action", async () => {
-    rest
-      .mockResolvedValueOnce(state)
-      .mockResolvedValueOnce({ warnings: [] })
-      .mockResolvedValue(state);
-    mount();
-    await loaded();
-    expect(rest.mock.calls.every(([path]) => path === "/state")).toBe(true);
-    await userEvent.click(
-      screen.getByRole("button", { name: "Sync Projects" }),
-    );
-    await screen.findByText("Completed.");
+  it("syncs from the palette while the panel is closed without duplicates", async () => {
+    const pending = deferred();
+    const key = ["hermes-timber", scopeKey(), "state"];
+    const other = ["hermes-timber", "another-scope", "state"];
+    queryClient.setQueryData(key, state);
+    queryClient.setQueryData(other, state);
+    rest.mockReturnValue(pending.promise);
+    plugin.register(context);
+    const data = register.mock.calls
+      .map(([item]) => item)
+      .find((item) => item.id === "sync-projects")?.data;
+    if (
+      typeof data !== "object" ||
+      data === null ||
+      !("run" in data) ||
+      typeof data.run !== "function"
+    )
+      throw new Error("Missing sync command");
+    data.run();
+    data.run();
+    expect(rest).toHaveBeenCalledTimes(1);
     expect(rest).toHaveBeenCalledWith("/sync", { method: "POST", body: {} });
+    pending.resolve({ warnings: [] });
     await waitFor(() =>
-      expect(
-        rest.mock.calls.filter(([path]) => path === "/state"),
-      ).toHaveLength(2),
+      expect(host.notify).toHaveBeenCalledWith({
+        kind: "success",
+        message: "Projects synced.",
+      }),
     );
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(other)?.isInvalidated).toBe(false);
+  });
+
+  it.each([
+    [
+      { warnings: ["Folder belongs to another Project"] },
+      "warning",
+      "Folder belongs to another Project",
+    ],
+    [{ invalid: true }, "error", "invalid mutation response"],
+  ])(
+    "reports sync warnings and malformed responses",
+    async (response, kind, text) => {
+      rest.mockResolvedValue(response);
+      plugin.register(context);
+      const data = register.mock.calls
+        .map(([item]) => item)
+        .find((item) => item.id === "sync-projects")?.data;
+      if (
+        typeof data !== "object" ||
+        data === null ||
+        !("run" in data) ||
+        typeof data.run !== "function"
+      )
+        throw new Error("Missing sync command");
+      data.run();
+      await waitFor(() =>
+        expect(host.notify).toHaveBeenCalledWith({
+          kind,
+          message: expect.stringContaining(text),
+        }),
+      );
+      expect(rest).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("ignores a sync result after the gateway changes", async () => {
+    const pending = deferred();
+    rest.mockReturnValue(pending.promise);
+    plugin.register(context);
+    const data = register.mock.calls
+      .map(([item]) => item)
+      .find((item) => item.id === "sync-projects")?.data;
+    if (
+      typeof data !== "object" ||
+      data === null ||
+      !("run" in data) ||
+      typeof data.run !== "function"
+    )
+      throw new Error("Missing sync command");
+    data.run();
+    switchScope("other");
+    pending.resolve({ warnings: [] });
+    await act(async () => {
+      await pending.promise;
+    });
+    expect(host.notify).not.toHaveBeenCalled();
+    expect(rest).toHaveBeenCalledTimes(1);
   });
 
   it("previews the exact selector, path, and branch before token-only removal", async () => {
@@ -645,13 +718,13 @@ describe("Timber desktop panel", () => {
       screen.getByRole("button", { name: "Remove done@app" }),
     ).toBeDisabled();
     expect(
-      screen.getByRole("button", { name: "Sync Projects" }),
+      screen.getByRole("button", { name: "Add repository" }),
     ).toBeDisabled();
     rest.mockResolvedValue(state);
     await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
     await waitFor(() =>
       expect(
-        screen.getByRole("button", { name: "Sync Projects" }),
+        screen.getByRole("button", { name: "Add repository" }),
       ).toBeEnabled(),
     );
     act(() => {
@@ -696,7 +769,7 @@ describe("Timber desktop panel", () => {
         ),
       ).not.toBeInTheDocument();
       expect(
-        screen.getByRole("button", { name: "Sync Projects" }),
+        screen.getByRole("button", { name: "Add repository" }),
       ).toBeDisabled();
       await act(async () => {
         pending.resolve({ ...state, worktrees: [], host: "gateway-b" });

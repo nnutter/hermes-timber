@@ -96,13 +96,13 @@ It excludes Node modules, the Python environment, development tools, and tests.
 ## Use the panel
 
 Use **Add repository** to register a gateway-local path or remote URL; credentials in URLs are rejected.
-Adding a repository does not sync Projects. Select **Sync Projects** separately.
+Adding a repository also syncs Projects. If sync fails, the repository remains registered.
 Create worktrees from a registered repository.
 Leave the branch name empty to let Timber choose a name.
 The plugin uses `--no-herdr` and does not enable mise trust or repository hooks.
 Existing Timber configuration can still run repository setup during creation.
 
-Use **Sync Projects** to reconcile existing worktrees with Hermes Projects.
+Run **Sync Projects** from the command palette to reconcile existing worktrees with Hermes Projects, even when the Timber panel is closed.
 Listing worktrees does not create or modify Projects.
 The plugin records the folder associations it creates and preserves associations that it does not own.
 Empty repository Projects remain available after cleanup.

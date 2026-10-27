@@ -1,5 +1,10 @@
 // ui/plugin.tsx
-import { host as host3, KEYBINDS_AREA, PALETTE_AREA } from "@hermes/plugin-sdk";
+import {
+  host as host3,
+  KEYBINDS_AREA,
+  PALETTE_AREA,
+  queryClient
+} from "@hermes/plugin-sdk";
 
 // ui/panel.tsx
 import { useEffect, useRef, useState } from "react";
@@ -309,7 +314,7 @@ function ScopedPanel({
     const project = data?.projects[worktree.repo];
     if (!project)
       throw new Error(
-        "No Hermes Project exists for this repository. Select Sync Projects first."
+        "No Hermes Project exists for this repository. Run Sync Projects from the command palette first."
       );
     const selected = await host2.request("projects.set_active", {
       id: project,
@@ -524,23 +529,6 @@ function ScopedPanel({
                   setAdding((value) => !value);
                 },
                 children: "Add repository"
-              }
-            ),
-            /* @__PURE__ */ jsx(
-              Button,
-              {
-                type: "button",
-                size: "sm",
-                variant: "outline",
-                disabled,
-                onClick: () => {
-                  disarm();
-                  run(async () => {
-                    warnings(await post("/sync", {}));
-                    await refresh();
-                  });
-                },
-                children: "Sync Projects"
               }
             )
           ] })
@@ -908,6 +896,7 @@ var plugin = {
   name: "Timber",
   description: "Create, open, and safely remove Timber worktrees in repository Projects.",
   register(context) {
+    let syncing = false;
     context.register({
       id: "panel",
       area: "panes",
@@ -930,6 +919,50 @@ var plugin = {
       run: () => host3.revealPane("hermes-timber:panel")
     };
     context.register({ id: command.id, area: PALETTE_AREA, data: command });
+    const sync = {
+      id: "sync-projects",
+      label: "Sync Projects",
+      keywords: ["timber", "worktree", "repository"],
+      run: () => {
+        if (syncing) return;
+        const scope = scopeKey();
+        try {
+          assertScope(scope);
+        } catch (error) {
+          host3.notify({ kind: "error", message: message(error) });
+          return;
+        }
+        syncing = true;
+        void (async () => {
+          try {
+            const result = await context.rest("/sync", {
+              method: "POST",
+              body: {}
+            });
+            assertScope(scope);
+            const warnings = responseWarnings(result);
+            await queryClient.invalidateQueries({
+              queryKey: ["hermes-timber", scope, "state"],
+              exact: true
+            });
+            assertScope(scope);
+            host3.notify({
+              kind: warnings.length ? "warning" : "success",
+              message: warnings.length ? warnings.join("\n") : "Projects synced."
+            });
+          } catch (error) {
+            if (scopeKey() === scope && host3.state.gateway.get() === "open")
+              host3.notify({
+                kind: "error",
+                message: `Project sync failed: ${message(error)}`
+              });
+          } finally {
+            syncing = false;
+          }
+        })();
+      }
+    };
+    context.register({ id: sync.id, area: PALETTE_AREA, data: sync });
   }
 };
 var plugin_default = plugin;

@@ -224,7 +224,7 @@ function ScopedPanel({
     const project = data?.projects[worktree.repo];
     if (!project)
       throw new Error(
-        "No Hermes Project exists for this repository. Select Sync Projects first.",
+        "No Hermes Project exists for this repository. Run Sync Projects from the command palette first.",
       );
     const selected = await host.request<unknown>("projects.set_active", {
       id: project,
@@ -493,21 +493,6 @@ function ScopedPanel({
             }}
           >
             Add repository
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={disabled}
-            onClick={() => {
-              disarm();
-              run(async () => {
-                warnings(await post("/sync", {}));
-                await refresh();
-              });
-            }}
-          >
-            Sync Projects
           </Button>
         </div>
       </header>

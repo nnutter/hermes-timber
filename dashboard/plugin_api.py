@@ -443,7 +443,7 @@ def add_repository(body: RepositoryAdd) -> RepositoryAdded:
 			raise HTTPException(422, "Credentials in repository URLs are not allowed")
 	except ValueError as exc:
 		raise HTTPException(422, "Invalid repository source") from exc
-	with locked():
+	with locked() as db:
 		before = listing()
 		if before.warnings:
 			raise HTTPException(502, "Listing reported diagnostics; repository addition refused")
@@ -481,6 +481,13 @@ def add_repository(body: RepositoryAdd) -> RepositoryAdded:
 			)
 			else []
 		)
+		try:
+			_, sync_warnings = reconcile(db, after)
+			warnings.extend(sync_warnings)
+		except (HTTPException, sqlite3.Error, ValueError, OSError) as exc:
+			warnings.append(
+				f"Repository added, but Project sync failed; use Sync Projects to retry: {exc}"
+			)
 		return RepositoryAdded(repository=added.pop(), warnings=warnings)
 
 

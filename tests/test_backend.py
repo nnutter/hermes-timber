@@ -108,6 +108,22 @@ def sandbox(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[Sandbo
 		yield Sandbox(tmp_path, profile, client)
 
 
+def test_repository_registration_reports_sync_failure(
+	sandbox: Sandbox, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	def fail(*_args: object, **_kwargs: object) -> None:
+		raise OSError("projects unavailable")
+
+	monkeypatch.setattr(api, "reconcile", fail)
+	response = sandbox.client.post(
+		"/repositories", json={"source": str(sandbox.root / "origin"), "name": "example/other"}
+	)
+	assert response.status_code == 200, response.text
+	assert response.json()["repository"] == "example/other"
+	assert "Repository added, but Project sync failed" in response.json()["warnings"][0]
+	assert "example/other" in sandbox.state().repositories
+
+
 def test_direct_loader_import(sandbox: Sandbox) -> None:
 	"""Hermes loads a standalone file, without installing our repository as a package."""
 	spec = importlib.util.spec_from_file_location(
@@ -494,7 +510,7 @@ def test_add_repository_real_timber(sandbox: Sandbox) -> None:
 	assert response.status_code == 200, response.text
 	assert response.json()["repository"] == "other/repo"
 	assert "other/repo" in sandbox.state().repositories
-	assert sandbox.state().projects == {}
+	assert set(sandbox.state().projects) == {"example/demo", "other/repo"}
 
 
 @pytest.mark.parametrize("source", ["-bad", "bad\npath", "https://user:secret@example.com/repo"])

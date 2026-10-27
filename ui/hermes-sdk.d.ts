@@ -4,6 +4,7 @@ declare module "@hermes/plugin-sdk" {
   import type { ReadableAtom } from "nanostores";
   import type { ComponentType, ComponentProps, ReactNode } from "react";
   export { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+  export const queryClient: import("@tanstack/react-query").QueryClient;
   export interface PluginRestOptions {
     method?: string;
     body?: unknown;
@@ -51,6 +52,10 @@ declare module "@hermes/plugin-sdk" {
     };
     onEvent: (type: string, listener: () => void) => () => void;
     revealPane: (paneId: string) => void;
+    notify: (input: {
+      kind: "success" | "warning" | "error";
+      message: string;
+    }) => string;
     request: <T>(
       method: string,
       params?: Record<string, unknown>,

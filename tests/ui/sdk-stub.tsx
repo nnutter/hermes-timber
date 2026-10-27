@@ -1,7 +1,9 @@
 import { atom } from "nanostores";
 import { vi } from "vitest";
 import type { ComponentProps } from "react";
+import { QueryClient } from "@tanstack/react-query";
 export { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+export const queryClient = new QueryClient();
 
 let epoch = 0;
 const listeners = new Set<() => void>();
@@ -27,6 +29,9 @@ export const host = {
       (session: string, options?: Record<string, unknown>) => Promise<void>
     >(),
   revealPane: vi.fn<(id: string) => void>(),
+  notify: vi.fn<(input: { kind: string; message: string }) => string>(
+    () => "notice",
+  ),
 };
 export function switchScope(connection: string, profile = "default") {
   epoch++;
@@ -41,6 +46,8 @@ export function resetHost() {
   host.state.gateway.set("open");
   host.request.mockReset();
   host.openSession.mockReset();
+  host.notify.mockClear();
+  queryClient.clear();
 }
 export const PALETTE_AREA = "palette";
 export const KEYBINDS_AREA = "keybinds";
