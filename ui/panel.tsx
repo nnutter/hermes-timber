@@ -141,10 +141,13 @@ function ScopedPanel({
   const [creating, setCreating] = useState(false);
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState(false);
+  const [created, setCreated] = useState(false);
   const addedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const createdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
     () => () => {
       if (addedTimer.current !== null) clearTimeout(addedTimer.current);
+      if (createdTimer.current !== null) clearTimeout(createdTimer.current);
     },
     [],
   );
@@ -235,7 +238,7 @@ function ScopedPanel({
     },
   });
   const busy = operation.isPending;
-  const disabled = !ready || busy || listing.isFetching;
+  const disabled = !ready || busy;
   const run = (
     action: () => Promise<void>,
     kind: "create" | "add" | null = null,
@@ -355,6 +358,8 @@ function ScopedPanel({
   function create(event: FormEvent) {
     event.preventDefault();
     run(async () => {
+      if (createdTimer.current !== null) clearTimeout(createdTimer.current);
+      setCreated(false);
       const chosen = createRepo || data?.repositories[0];
       if (!chosen) throw new Error("Select a repository first.");
       const response = await post("/create", {
@@ -366,13 +371,17 @@ function ScopedPanel({
         throw new Error(
           "The Timber backend returned an invalid create response.",
         );
-      warnings(response);
+      if (current()) setNotice(responseWarnings(response));
       if (current()) {
         setCreating(false);
         setName("");
         setUpstream("");
       }
       await refresh();
+      if (current()) {
+        setCreated(true);
+        createdTimer.current = setTimeout(() => setCreated(false), 2000);
+      }
     }, "create");
   }
 
@@ -488,7 +497,7 @@ function ScopedPanel({
               type="button"
               size="xs"
               variant="ghost"
-              disabled={!online || busy || listing.isFetching}
+              disabled={!online || busy}
               aria-label={
                 authenticationRequired ? "Retry after sign-in" : "Refresh"
               }
@@ -523,19 +532,17 @@ function ScopedPanel({
             {data.hermes_home}
           </div>
         )}
-        <div style={row}>
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            disabled={disabled || !data?.repositories.length}
-            onClick={() => {
-              disarm();
-              setCreating((value) => !value);
-            }}
-          >
-            New worktree
-          </Button>
+        <div style={{ ...row, justifyContent: "flex-end" }}>
+          {added && (
+            <span
+              role="status"
+              aria-label="Repository added"
+              title="Repository added"
+              style={{ color: "#22c55e" }}
+            >
+              <Codicon name="check" />
+            </span>
+          )}
           <Button
             type="button"
             size="sm"
@@ -548,16 +555,30 @@ function ScopedPanel({
           >
             Add repository
           </Button>
-          {added && (
+        </div>
+        <div style={{ ...row, justifyContent: "flex-end" }}>
+          {created && (
             <span
               role="status"
-              aria-label="Repository added"
-              title="Repository added"
+              aria-label="Worktree created"
+              title="Worktree created"
               style={{ color: "#22c55e" }}
             >
               <Codicon name="check" />
             </span>
           )}
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            disabled={disabled || !data?.repositories.length}
+            onClick={() => {
+              disarm();
+              setCreating((value) => !value);
+            }}
+          >
+            New worktree
+          </Button>
         </div>
       </header>
       {!online && (

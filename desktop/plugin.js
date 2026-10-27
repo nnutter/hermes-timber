@@ -241,10 +241,13 @@ function ScopedPanel({
   const [creating, setCreating] = useState(false);
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState(false);
+  const [created, setCreated] = useState(false);
   const addedTimer = useRef(null);
+  const createdTimer = useRef(null);
   useEffect(
     () => () => {
       if (addedTimer.current !== null) clearTimeout(addedTimer.current);
+      if (createdTimer.current !== null) clearTimeout(createdTimer.current);
     },
     []
   );
@@ -320,7 +323,7 @@ function ScopedPanel({
     }
   });
   const busy = operation.isPending;
-  const disabled = !ready || busy || listing.isFetching;
+  const disabled = !ready || busy;
   const run = (action, kind = null) => {
     if (actionLocked.current || kind === "create" && blockedCreate || kind === "add" && blockedAdd)
       return;
@@ -350,26 +353,26 @@ function ScopedPanel({
     check();
     if (!record(selected) || selected.active_id !== project)
       throw new Error("Hermes did not activate the repository Project.");
-    const created = await host2.request("session.create", {
+    const created2 = await host2.request("session.create", {
       cwd: worktree.path,
       title: worktree.name,
       source: "desktop",
       profile: host2.state.profile.get()
     });
     check();
-    if (!record(created) || typeof created.stored_session_id !== "string" || !created.stored_session_id || !record(created.info) || created.info.cwd !== worktree.path) {
+    if (!record(created2) || typeof created2.stored_session_id !== "string" || !created2.stored_session_id || !record(created2.info) || created2.info.cwd !== worktree.path) {
       throw new Error(
         "Hermes did not confirm the requested working directory. The chat was not opened."
       );
     }
-    await host2.openSession(created.stored_session_id, {
+    await host2.openSession(created2.stored_session_id, {
       profile: host2.state.profile.get(),
       awaitHydration: true,
       keepAllProfilesScope: true
     });
     check();
     const moved = await host2.request("session.workspace.move", {
-      session_key: created.stored_session_id,
+      session_key: created2.stored_session_id,
       cwd: worktree.path,
       profile: host2.state.profile.get()
     });
@@ -411,6 +414,8 @@ function ScopedPanel({
   function create(event) {
     event.preventDefault();
     run(async () => {
+      if (createdTimer.current !== null) clearTimeout(createdTimer.current);
+      setCreated(false);
       const chosen = createRepo || data?.repositories[0];
       if (!chosen) throw new Error("Select a repository first.");
       const response = await post("/create", {
@@ -422,13 +427,17 @@ function ScopedPanel({
         throw new Error(
           "The Timber backend returned an invalid create response."
         );
-      warnings(response);
+      if (current()) setNotice(responseWarnings(response));
       if (current()) {
         setCreating(false);
         setName("");
         setUpstream("");
       }
       await refresh();
+      if (current()) {
+        setCreated(true);
+        createdTimer.current = setTimeout(() => setCreated(false), 2e3);
+      }
     }, "create");
   }
   function addRepository(event) {
@@ -514,7 +523,7 @@ function ScopedPanel({
                   type: "button",
                   size: "xs",
                   variant: "ghost",
-                  disabled: !online || busy || listing.isFetching,
+                  disabled: !online || busy,
                   "aria-label": authenticationRequired ? "Retry after sign-in" : "Refresh",
                   title: authenticationRequired ? "Retry after sign-in" : "Reload worktrees",
                   onClick: () => {
@@ -541,19 +550,15 @@ function ScopedPanel({
             /* @__PURE__ */ jsx("br", {}),
             data.hermes_home
           ] }),
-          /* @__PURE__ */ jsxs("div", { style: row, children: [
-            /* @__PURE__ */ jsx(
-              Button,
+          /* @__PURE__ */ jsxs("div", { style: { ...row, justifyContent: "flex-end" }, children: [
+            added && /* @__PURE__ */ jsx(
+              "span",
               {
-                type: "button",
-                size: "sm",
-                variant: "secondary",
-                disabled: disabled || !data?.repositories.length,
-                onClick: () => {
-                  disarm();
-                  setCreating((value) => !value);
-                },
-                children: "New worktree"
+                role: "status",
+                "aria-label": "Repository added",
+                title: "Repository added",
+                style: { color: "#22c55e" },
+                children: /* @__PURE__ */ jsx(Codicon, { name: "check" })
               }
             ),
             /* @__PURE__ */ jsx(
@@ -569,15 +574,31 @@ function ScopedPanel({
                 },
                 children: "Add repository"
               }
-            ),
-            added && /* @__PURE__ */ jsx(
+            )
+          ] }),
+          /* @__PURE__ */ jsxs("div", { style: { ...row, justifyContent: "flex-end" }, children: [
+            created && /* @__PURE__ */ jsx(
               "span",
               {
                 role: "status",
-                "aria-label": "Repository added",
-                title: "Repository added",
+                "aria-label": "Worktree created",
+                title: "Worktree created",
                 style: { color: "#22c55e" },
                 children: /* @__PURE__ */ jsx(Codicon, { name: "check" })
+              }
+            ),
+            /* @__PURE__ */ jsx(
+              Button,
+              {
+                type: "button",
+                size: "sm",
+                variant: "secondary",
+                disabled: disabled || !data?.repositories.length,
+                onClick: () => {
+                  disarm();
+                  setCreating((value) => !value);
+                },
+                children: "New worktree"
               }
             )
           ] })

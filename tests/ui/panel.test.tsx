@@ -158,7 +158,8 @@ describe("Timber desktop panel", () => {
       name: "Repository added",
     });
     expect(
-      screen.getByRole("button", { name: "Add repository" }).nextElementSibling,
+      screen.getByRole("button", { name: "Add repository" })
+        .previousElementSibling,
     ).toBe(indicator);
     expect(screen.queryByText("Completed.")).not.toBeInTheDocument();
     await new Promise((resolve) => setTimeout(resolve, 1500));
