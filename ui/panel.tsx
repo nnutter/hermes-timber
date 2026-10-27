@@ -481,48 +481,100 @@ function ScopedPanel({
       }}
     >
       <header style={stack}>
-        <div style={{ ...row, justifyContent: "space-between" }}>
+        <div style={{ ...row, justifyContent: "space-between", alignItems: "flex-start" }}>
           <strong>Timber</strong>
-          <div style={row}>
-            <Badge variant={ready ? "muted" : "warn"}>
-              {!online
-                ? "Offline"
-                : authenticationRequired
-                  ? "Sign-in required"
-                  : listing.isError
-                    ? "Stale"
-                    : "Connected"}
-            </Badge>
-            <Button
-              type="button"
-              size="xs"
-              variant="ghost"
-              disabled={!online || busy}
-              aria-label={
-                authenticationRequired ? "Retry after sign-in" : "Refresh"
-              }
-              title={
-                authenticationRequired
-                  ? "Retry after sign-in"
-                  : "Reload worktrees"
-              }
-              onClick={() => {
-                void refresh()
-                  .then(() => {
-                    if (current()) {
-                      setError(null);
-                      setBlockedCreate(false);
-                      setBlockedAdd(false);
-                    }
-                  })
-                  .catch((failure: unknown) => {
-                    if (current())
-                      setError((previous) => previous ?? message(failure));
-                  });
-              }}
-            >
-              <Codicon name="refresh" />
-            </Button>
+          <div style={{ display: "grid", justifyItems: "end", gap: 6 }}>
+            <div style={row}>
+              <Badge variant={ready ? "muted" : "warn"}>
+                {!online
+                  ? "Offline"
+                  : authenticationRequired
+                    ? "Sign-in required"
+                    : listing.isError
+                      ? "Stale"
+                      : "Connected"}
+              </Badge>
+              <Button
+                type="button"
+                size="xs"
+                variant="ghost"
+                disabled={!online || busy}
+                aria-label={
+                  authenticationRequired ? "Retry after sign-in" : "Refresh"
+                }
+                title={
+                  authenticationRequired
+                    ? "Retry after sign-in"
+                    : "Reload worktrees"
+                }
+                onClick={() => {
+                  void refresh()
+                    .then(() => {
+                      if (current()) {
+                        setError(null);
+                        setBlockedCreate(false);
+                        setBlockedAdd(false);
+                      }
+                    })
+                    .catch((failure: unknown) => {
+                      if (current())
+                        setError((previous) => previous ?? message(failure));
+                    });
+                }}
+              >
+                <Codicon name="refresh" />
+              </Button>
+            </div>
+            <div style={{ ...row, justifyContent: "flex-end" }}>
+              {added && (
+                <span
+                  role="status"
+                  aria-label="Repository added"
+                  title="Repository added"
+                  style={{ color: "#22c55e" }}
+                >
+                  <Codicon name="check" />
+                </span>
+              )}
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={disabled}
+                style={{ width: 132, justifyContent: "center" }}
+                onClick={() => {
+                  disarm();
+                  setAdding((value) => !value);
+                }}
+              >
+                Add repository
+              </Button>
+            </div>
+            <div style={{ ...row, justifyContent: "flex-end" }}>
+              {created && (
+                <span
+                  role="status"
+                  aria-label="Worktree created"
+                  title="Worktree created"
+                  style={{ color: "#22c55e" }}
+                >
+                  <Codicon name="check" />
+                </span>
+              )}
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={disabled || !data?.repositories.length}
+                style={{ width: 132, justifyContent: "center" }}
+                onClick={() => {
+                  disarm();
+                  setCreating((value) => !value);
+                }}
+              >
+                New worktree
+              </Button>
+            </div>
           </div>
         </div>
         {data && (
@@ -532,54 +584,6 @@ function ScopedPanel({
             {data.hermes_home}
           </div>
         )}
-        <div style={{ ...row, justifyContent: "flex-end" }}>
-          {added && (
-            <span
-              role="status"
-              aria-label="Repository added"
-              title="Repository added"
-              style={{ color: "#22c55e" }}
-            >
-              <Codicon name="check" />
-            </span>
-          )}
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            disabled={disabled}
-            onClick={() => {
-              disarm();
-              setAdding((value) => !value);
-            }}
-          >
-            Add repository
-          </Button>
-        </div>
-        <div style={{ ...row, justifyContent: "flex-end" }}>
-          {created && (
-            <span
-              role="status"
-              aria-label="Worktree created"
-              title="Worktree created"
-              style={{ color: "#22c55e" }}
-            >
-              <Codicon name="check" />
-            </span>
-          )}
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            disabled={disabled || !data?.repositories.length}
-            onClick={() => {
-              disarm();
-              setCreating((value) => !value);
-            }}
-          >
-            New worktree
-          </Button>
-        </div>
       </header>
       {!online && (
         <p role="status">
