@@ -249,6 +249,9 @@ function ScopedPanel({
   const [preview, setPreview] = useState(null);
   const [notice, setNotice] = useState([]);
   const [error, setError] = useState(null);
+  const [blockedCreate, setBlockedCreate] = useState(false);
+  const [blockedAdd, setBlockedAdd] = useState(false);
+  const operationKind = useRef(null);
   const [recent, setRecent] = useState({});
   const data = listing.data;
   const ready = online && !authenticationRequired && Boolean(data) && !listing.isError;
@@ -262,10 +265,17 @@ function ScopedPanel({
   };
   const post = async (path, body) => {
     check();
-    const response = await context.rest(path, {
-      method: "POST",
-      body
-    });
+    let response;
+    try {
+      response = await context.rest(path, { method: "POST", body });
+    } catch (failure) {
+      if (path === "/repositories" && (record(failure) && (failure.status === 404 || failure.statusCode === 404) || /\b404\b/.test(message(failure)))) {
+        throw new Error(
+          "Repository endpoint not found (404). The Timber backend may be outdated; update and restart the dashboard, then refresh before retrying."
+        );
+      }
+      throw failure;
+    }
     check();
     return response;
   };
@@ -283,21 +293,30 @@ function ScopedPanel({
       await run2();
     },
     onMutate: () => {
-      setError(null);
       setNotice([]);
     },
-    onError: (failure) => {
+    onError: async (failure) => {
       if (current()) {
+        if (operationKind.current === "create") setBlockedCreate(true);
+        if (operationKind.current === "add") setBlockedAdd(true);
         pauseForAuthentication(failure);
         setError(message(failure));
         setPreview(null);
+        if (!authenticationFailure(failure)) {
+          try {
+            await refresh();
+          } catch {
+          }
+        }
       }
     }
   });
   const busy = operation.isPending;
-  const disabled = !ready || busy || error !== null || listing.isFetching;
-  const run = (action) => {
-    if (actionLocked.current) return;
+  const disabled = !ready || busy || listing.isFetching;
+  const run = (action, kind = null) => {
+    if (actionLocked.current || kind === "create" && blockedCreate || kind === "add" && blockedAdd)
+      return;
+    operationKind.current = kind;
     actionLocked.current = true;
     operation.mutate(action, {
       onSettled: () => {
@@ -402,7 +421,7 @@ function ScopedPanel({
         setUpstream("");
       }
       await refresh();
-    });
+    }, "create");
   }
   function addRepository(event) {
     event.preventDefault();
@@ -425,7 +444,7 @@ function ScopedPanel({
         setAlias("");
       }
       await refresh();
-    });
+    }, "add");
   }
   const filtered = (data?.worktrees ?? []).filter((worktree) => {
     const needle = search.trim().toLocaleLowerCase();
@@ -485,9 +504,15 @@ function ScopedPanel({
                   "aria-label": authenticationRequired ? "Retry after sign-in" : "Refresh",
                   title: authenticationRequired ? "Retry after sign-in" : "Reload worktrees",
                   onClick: () => {
-                    setError(null);
-                    void refresh().catch((failure) => {
-                      if (current()) setError(message(failure));
+                    void refresh().then(() => {
+                      if (current()) {
+                        setError(null);
+                        setBlockedCreate(false);
+                        setBlockedAdd(false);
+                      }
+                    }).catch((failure) => {
+                      if (current())
+                        setError((previous) => previous ?? message(failure));
                     });
                   },
                   children: /* @__PURE__ */ jsx(Codicon, { name: "refresh" })
@@ -541,7 +566,10 @@ function ScopedPanel({
           message(listing.error),
           " Actions are disabled until a successful refresh."
         ] }),
-        error && !authenticationRequired && /* @__PURE__ */ jsx("p", { role: "alert", children: error }),
+        error && !authenticationRequired && /* @__PURE__ */ jsxs("p", { role: "alert", children: [
+          error,
+          (blockedAdd || blockedCreate) && " The operation may have partially completed. Review the listing, then use Refresh before retrying."
+        ] }),
         notice.length > 0 && /* @__PURE__ */ jsx("div", { role: "status", children: notice.map((text, index) => /* @__PURE__ */ jsx("p", { children: text }, index)) }),
         data?.warnings.length ? /* @__PURE__ */ jsx("div", { "aria-label": "Backend warnings", children: data.warnings.map((text, index) => /* @__PURE__ */ jsx("p", { style: muted, children: text }, index)) }) : null,
         adding && /* @__PURE__ */ jsxs(
@@ -590,7 +618,7 @@ function ScopedPanel({
                   {
                     type: "submit",
                     size: "sm",
-                    disabled: disabled || !source.trim(),
+                    disabled: disabled || blockedAdd || !source.trim(),
                     children: "Add repo"
                   }
                 ),
@@ -660,7 +688,15 @@ function ScopedPanel({
                 )
               ] }),
               /* @__PURE__ */ jsxs("div", { style: row, children: [
-                /* @__PURE__ */ jsx(Button, { type: "submit", size: "sm", disabled, children: "Create worktree" }),
+                /* @__PURE__ */ jsx(
+                  Button,
+                  {
+                    type: "submit",
+                    size: "sm",
+                    disabled: disabled || blockedCreate,
+                    children: "Create worktree"
+                  }
+                ),
                 /* @__PURE__ */ jsx(
                   Button,
                   {

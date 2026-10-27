@@ -149,6 +149,9 @@ function ScopedPanel({
   const [preview, setPreview] = useState<RemovePreview | null>(null);
   const [notice, setNotice] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [blockedCreate, setBlockedCreate] = useState(false);
+  const [blockedAdd, setBlockedAdd] = useState(false);
+  const operationKind = useRef<"create" | "add" | null>(null);
   const [recent, setRecent] = useState<Record<string, number>>({});
   const data = listing.data;
   const ready =
@@ -169,10 +172,22 @@ function ScopedPanel({
 
   const post = async (path: string, body: Record<string, unknown>) => {
     check();
-    const response = await context.rest<unknown>(path, {
-      method: "POST",
-      body,
-    });
+    let response: unknown;
+    try {
+      response = await context.rest<unknown>(path, { method: "POST", body });
+    } catch (failure) {
+      if (
+        path === "/repositories" &&
+        ((record(failure) &&
+          (failure.status === 404 || failure.statusCode === 404)) ||
+          /\b404\b/.test(message(failure)))
+      ) {
+        throw new Error(
+          "Repository endpoint not found (404). The Timber backend may be outdated; update and restart the dashboard, then refresh before retrying.",
+        );
+      }
+      throw failure;
+    }
     check();
     return response;
   };
@@ -192,21 +207,38 @@ function ScopedPanel({
       await run();
     },
     onMutate: () => {
-      setError(null);
       setNotice([]);
     },
-    onError: (failure) => {
+    onError: async (failure) => {
       if (current()) {
+        if (operationKind.current === "create") setBlockedCreate(true);
+        if (operationKind.current === "add") setBlockedAdd(true);
         pauseForAuthentication(failure);
         setError(message(failure));
         setPreview(null);
+        if (!authenticationFailure(failure)) {
+          try {
+            await refresh();
+          } catch {
+            // The listing error keeps actions disabled until a successful refresh.
+          }
+        }
       }
     },
   });
   const busy = operation.isPending;
-  const disabled = !ready || busy || error !== null || listing.isFetching;
-  const run = (action: () => Promise<void>) => {
-    if (actionLocked.current) return;
+  const disabled = !ready || busy || listing.isFetching;
+  const run = (
+    action: () => Promise<void>,
+    kind: "create" | "add" | null = null,
+  ) => {
+    if (
+      actionLocked.current ||
+      (kind === "create" && blockedCreate) ||
+      (kind === "add" && blockedAdd)
+    )
+      return;
+    operationKind.current = kind;
     actionLocked.current = true;
     operation.mutate(action, {
       onSettled: () => {
@@ -333,7 +365,7 @@ function ScopedPanel({
         setUpstream("");
       }
       await refresh();
-    });
+    }, "create");
   }
 
   function addRepository(event: FormEvent) {
@@ -361,7 +393,7 @@ function ScopedPanel({
         setAlias("");
       }
       await refresh();
-    });
+    }, "add");
   }
 
   const filtered = (data?.worktrees ?? [])
@@ -452,10 +484,18 @@ function ScopedPanel({
                   : "Reload worktrees"
               }
               onClick={() => {
-                setError(null);
-                void refresh().catch((failure: unknown) => {
-                  if (current()) setError(message(failure));
-                });
+                void refresh()
+                  .then(() => {
+                    if (current()) {
+                      setError(null);
+                      setBlockedCreate(false);
+                      setBlockedAdd(false);
+                    }
+                  })
+                  .catch((failure: unknown) => {
+                    if (current())
+                      setError((previous) => previous ?? message(failure));
+                  });
               }}
             >
               <Codicon name="refresh" />
@@ -516,7 +556,13 @@ function ScopedPanel({
           refresh.
         </p>
       )}
-      {error && !authenticationRequired && <p role="alert">{error}</p>}
+      {error && !authenticationRequired && (
+        <p role="alert">
+          {error}
+          {(blockedAdd || blockedCreate) &&
+            " The operation may have partially completed. Review the listing, then use Refresh before retrying."}
+        </p>
+      )}
       {notice.length > 0 && (
         <div role="status">
           {notice.map((text, index) => (
@@ -567,7 +613,7 @@ function ScopedPanel({
             <Button
               type="submit"
               size="sm"
-              disabled={disabled || !source.trim()}
+              disabled={disabled || blockedAdd || !source.trim()}
             >
               Add repo
             </Button>
@@ -629,7 +675,11 @@ function ScopedPanel({
             />
           </label>
           <div style={row}>
-            <Button type="submit" size="sm" disabled={disabled}>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={disabled || blockedCreate}
+            >
               Create worktree
             </Button>
             <Button

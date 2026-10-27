@@ -160,6 +160,71 @@ describe("Timber desktop panel", () => {
     ).toBeGreaterThan(1);
   });
 
+  it("reports a missing repository endpoint and recovers unrelated actions without replay", async () => {
+    rest.mockImplementation(async (path) => {
+      if (path === "/repositories")
+        throw Object.assign(new Error('404: {"detail":"Not Found"}'), {
+          status: 404,
+        });
+      return state;
+    });
+    mount();
+    const user = userEvent.setup();
+    await loaded();
+    await user.click(screen.getByRole("button", { name: "Add repository" }));
+    await user.type(
+      screen.getByLabelText("Repository URL or path"),
+      "git@github.com:nnutter/tuicr",
+    );
+    await user.click(screen.getByRole("button", { name: "Add repo" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "backend may be outdated",
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "New worktree" }),
+      ).toBeEnabled(),
+    );
+    expect(screen.getByRole("button", { name: "Add repo" })).toBeDisabled();
+    expect(screen.getByRole("alert")).toHaveTextContent("partially completed");
+    expect(
+      rest.mock.calls.filter(([path]) => path === "/repositories"),
+    ).toHaveLength(1);
+    expect(rest.mock.calls.filter(([path]) => path === "/state")).toHaveLength(
+      2,
+    );
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Add repo" })).toBeEnabled(),
+    );
+  });
+
+  it("keeps actions disabled if recovery returns invalid state", async () => {
+    rest.mockImplementation(async (path) => {
+      if (path === "/repositories") throw new Error("<unsafe failure>");
+      return rest.mock.calls.filter(([item]) => item === "/state").length === 1
+        ? state
+        : {};
+    });
+    mount();
+    const user = userEvent.setup();
+    await loaded();
+    await user.click(screen.getByRole("button", { name: "Add repository" }));
+    await user.type(
+      screen.getByLabelText("Repository URL or path"),
+      "nnutter/tuicr",
+    );
+    await user.click(screen.getByRole("button", { name: "Add repo" }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "New worktree" }),
+      ).toBeDisabled(),
+    );
+    expect(screen.getByText(/<unsafe failure>/)).toBeVisible();
+    expect(document.querySelector("unsafe")).toBeNull();
+    expect(screen.getByText(/invalid state response/)).toBeVisible();
+  });
+
   it.each([
     [true, true, "Merged", "success"],
     [false, true, "Merged", "warn"],
@@ -440,9 +505,14 @@ describe("Timber desktop panel", () => {
     expect(
       screen.getByRole("button", { name: "Create worktree" }),
     ).toBeDisabled();
-    expect(
-      screen.getByRole("button", { name: "Add repository" }),
-    ).toBeDisabled();
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Add repository" }),
+      ).toBeEnabled(),
+    );
+    expect(rest.mock.calls.filter(([path]) => path === "/create")).toHaveLength(
+      1,
+    );
     rest.mockResolvedValue(state);
     await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
     await waitFor(() =>
