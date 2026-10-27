@@ -481,13 +481,7 @@ function ScopedPanel({
       }}
     >
       <header style={stack}>
-        <div
-          style={{
-            ...row,
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-          }}
-        >
+        <div style={{ ...row, justifyContent: "space-between" }}>
           <strong>Timber</strong>
           <div style={row}>
             <span
@@ -755,35 +749,32 @@ function ScopedPanel({
           display: "grid",
           gridTemplateColumns: "minmax(0, 1fr) minmax(100px, auto)",
           gap: 8,
+          marginTop: 10,
         }}
       >
-        <label style={stack}>
-          Find worktrees
-          <Input
-            type="search"
-            value={search}
-            placeholder="Search worktrees"
-            onChange={(event) => {
-              disarm();
-              setSearch(event.target.value);
-            }}
-          />
-        </label>
-        <label style={stack}>
-          Sort
-          <select
-            style={selectStyle}
-            value={sort}
-            onChange={(event) => {
-              disarm();
-              setSort(event.target.value);
-            }}
-          >
-            <option value="recent">Recent</option>
-            <option value="repo">Repository</option>
-            <option value="name">Name</option>
-          </select>
-        </label>
+        <Input
+          type="search"
+          aria-label="Find worktrees"
+          value={search}
+          placeholder="Search worktrees"
+          onChange={(event) => {
+            disarm();
+            setSearch(event.target.value);
+          }}
+        />
+        <select
+          aria-label="Sort worktrees"
+          style={selectStyle}
+          value={sort}
+          onChange={(event) => {
+            disarm();
+            setSort(event.target.value);
+          }}
+        >
+          <option value="recent">Recent</option>
+          <option value="repo">Repository</option>
+          <option value="name">Name</option>
+        </select>
       </div>
       <div aria-live="polite" style={muted}>
         {data ? `${filtered.length} of ${data.worktrees.length} worktrees` : ""}

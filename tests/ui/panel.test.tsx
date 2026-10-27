@@ -465,7 +465,7 @@ describe("Timber desktop panel", () => {
       );
     }
     fireEvent.change(search, { target: { value: "" } });
-    fireEvent.change(screen.getByLabelText("Sort"), {
+    fireEvent.change(screen.getByLabelText("Sort worktrees"), {
       target: { value: "name" },
     });
     expect(

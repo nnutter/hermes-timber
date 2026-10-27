@@ -513,53 +513,43 @@ function ScopedPanel({
       },
       children: [
         /* @__PURE__ */ jsxs("header", { style: stack, children: [
-          /* @__PURE__ */ jsxs(
-            "div",
-            {
-              style: {
-                ...row,
-                justifyContent: "space-between",
-                alignItems: "flex-start"
-              },
-              children: [
-                /* @__PURE__ */ jsx("strong", { children: "Timber" }),
-                /* @__PURE__ */ jsxs("div", { style: row, children: [
-                  /* @__PURE__ */ jsx(
-                    "span",
-                    {
-                      title: data ? `${data.host} \xB7 ${host2.state.profile.get()}
+          /* @__PURE__ */ jsxs("div", { style: { ...row, justifyContent: "space-between" }, children: [
+            /* @__PURE__ */ jsx("strong", { children: "Timber" }),
+            /* @__PURE__ */ jsxs("div", { style: row, children: [
+              /* @__PURE__ */ jsx(
+                "span",
+                {
+                  title: data ? `${data.host} \xB7 ${host2.state.profile.get()}
 ${data.hermes_home}` : void 0,
-                      children: /* @__PURE__ */ jsx(Badge, { variant: ready ? "muted" : "warn", children: !online ? "Offline" : authenticationRequired ? "Sign-in required" : listing.isError ? "Stale" : "Connected" })
-                    }
-                  ),
-                  /* @__PURE__ */ jsx(
-                    Button,
-                    {
-                      type: "button",
-                      size: "xs",
-                      variant: "ghost",
-                      disabled: !online || busy,
-                      "aria-label": authenticationRequired ? "Retry after sign-in" : "Refresh",
-                      title: authenticationRequired ? "Retry after sign-in" : "Reload worktrees",
-                      onClick: () => {
-                        void refresh().then(() => {
-                          if (current()) {
-                            setError(null);
-                            setBlockedCreate(false);
-                            setBlockedAdd(false);
-                          }
-                        }).catch((failure) => {
-                          if (current())
-                            setError((previous) => previous ?? message(failure));
-                        });
-                      },
-                      children: /* @__PURE__ */ jsx(Codicon, { name: "refresh" })
-                    }
-                  )
-                ] })
-              ]
-            }
-          ),
+                  children: /* @__PURE__ */ jsx(Badge, { variant: ready ? "muted" : "warn", children: !online ? "Offline" : authenticationRequired ? "Sign-in required" : listing.isError ? "Stale" : "Connected" })
+                }
+              ),
+              /* @__PURE__ */ jsx(
+                Button,
+                {
+                  type: "button",
+                  size: "xs",
+                  variant: "ghost",
+                  disabled: !online || busy,
+                  "aria-label": authenticationRequired ? "Retry after sign-in" : "Refresh",
+                  title: authenticationRequired ? "Retry after sign-in" : "Reload worktrees",
+                  onClick: () => {
+                    void refresh().then(() => {
+                      if (current()) {
+                        setError(null);
+                        setBlockedCreate(false);
+                        setBlockedAdd(false);
+                      }
+                    }).catch((failure) => {
+                      if (current())
+                        setError((previous) => previous ?? message(failure));
+                    });
+                  },
+                  children: /* @__PURE__ */ jsx(Codicon, { name: "refresh" })
+                }
+              )
+            ] })
+          ] }),
           /* @__PURE__ */ jsxs("div", { style: { ...row, justifyContent: "space-between" }, children: [
             /* @__PURE__ */ jsxs("div", { style: row, children: [
               /* @__PURE__ */ jsx(
@@ -777,43 +767,40 @@ ${data.hermes_home}` : void 0,
             style: {
               display: "grid",
               gridTemplateColumns: "minmax(0, 1fr) minmax(100px, auto)",
-              gap: 8
+              gap: 8,
+              marginTop: 10
             },
             children: [
-              /* @__PURE__ */ jsxs("label", { style: stack, children: [
-                "Find worktrees",
-                /* @__PURE__ */ jsx(
-                  Input,
-                  {
-                    type: "search",
-                    value: search,
-                    placeholder: "Search worktrees",
-                    onChange: (event) => {
-                      disarm();
-                      setSearch(event.target.value);
-                    }
+              /* @__PURE__ */ jsx(
+                Input,
+                {
+                  type: "search",
+                  "aria-label": "Find worktrees",
+                  value: search,
+                  placeholder: "Search worktrees",
+                  onChange: (event) => {
+                    disarm();
+                    setSearch(event.target.value);
                   }
-                )
-              ] }),
-              /* @__PURE__ */ jsxs("label", { style: stack, children: [
-                "Sort",
-                /* @__PURE__ */ jsxs(
-                  "select",
-                  {
-                    style: selectStyle,
-                    value: sort,
-                    onChange: (event) => {
-                      disarm();
-                      setSort(event.target.value);
-                    },
-                    children: [
-                      /* @__PURE__ */ jsx("option", { value: "recent", children: "Recent" }),
-                      /* @__PURE__ */ jsx("option", { value: "repo", children: "Repository" }),
-                      /* @__PURE__ */ jsx("option", { value: "name", children: "Name" })
-                    ]
-                  }
-                )
-              ] })
+                }
+              ),
+              /* @__PURE__ */ jsxs(
+                "select",
+                {
+                  "aria-label": "Sort worktrees",
+                  style: selectStyle,
+                  value: sort,
+                  onChange: (event) => {
+                    disarm();
+                    setSort(event.target.value);
+                  },
+                  children: [
+                    /* @__PURE__ */ jsx("option", { value: "recent", children: "Recent" }),
+                    /* @__PURE__ */ jsx("option", { value: "repo", children: "Repository" }),
+                    /* @__PURE__ */ jsx("option", { value: "name", children: "Name" })
+                  ]
+                }
+              )
             ]
           }
         ),
