@@ -512,101 +512,97 @@ function ScopedPanel({
         fontSize: 13
       },
       children: [
-        /* @__PURE__ */ jsxs("header", { style: stack, children: [
-          /* @__PURE__ */ jsxs("div", { style: { ...row, justifyContent: "space-between", alignItems: "flex-start" }, children: [
-            /* @__PURE__ */ jsx("strong", { children: "Timber" }),
-            /* @__PURE__ */ jsxs("div", { style: { display: "grid", justifyItems: "end", gap: 6 }, children: [
-              /* @__PURE__ */ jsxs("div", { style: row, children: [
-                /* @__PURE__ */ jsx(Badge, { variant: ready ? "muted" : "warn", children: !online ? "Offline" : authenticationRequired ? "Sign-in required" : listing.isError ? "Stale" : "Connected" }),
-                /* @__PURE__ */ jsx(
-                  Button,
-                  {
-                    type: "button",
-                    size: "xs",
-                    variant: "ghost",
-                    disabled: !online || busy,
-                    "aria-label": authenticationRequired ? "Retry after sign-in" : "Refresh",
-                    title: authenticationRequired ? "Retry after sign-in" : "Reload worktrees",
-                    onClick: () => {
-                      void refresh().then(() => {
-                        if (current()) {
-                          setError(null);
-                          setBlockedCreate(false);
-                          setBlockedAdd(false);
-                        }
-                      }).catch((failure) => {
-                        if (current())
-                          setError((previous) => previous ?? message(failure));
-                      });
-                    },
-                    children: /* @__PURE__ */ jsx(Codicon, { name: "refresh" })
-                  }
-                )
-              ] }),
-              /* @__PURE__ */ jsxs("div", { style: { ...row, justifyContent: "flex-end" }, children: [
-                added && /* @__PURE__ */ jsx(
-                  "span",
-                  {
-                    role: "status",
-                    "aria-label": "Repository added",
-                    title: "Repository added",
-                    style: { color: "#22c55e" },
-                    children: /* @__PURE__ */ jsx(Codicon, { name: "check" })
-                  }
-                ),
-                /* @__PURE__ */ jsx(
-                  Button,
-                  {
-                    type: "button",
-                    size: "sm",
-                    variant: "secondary",
-                    disabled,
-                    style: { width: 132, justifyContent: "center" },
-                    onClick: () => {
-                      disarm();
-                      setAdding((value) => !value);
-                    },
-                    children: "Add repository"
-                  }
-                )
-              ] }),
-              /* @__PURE__ */ jsxs("div", { style: { ...row, justifyContent: "flex-end" }, children: [
-                created && /* @__PURE__ */ jsx(
-                  "span",
-                  {
-                    role: "status",
-                    "aria-label": "Worktree created",
-                    title: "Worktree created",
-                    style: { color: "#22c55e" },
-                    children: /* @__PURE__ */ jsx(Codicon, { name: "check" })
-                  }
-                ),
-                /* @__PURE__ */ jsx(
-                  Button,
-                  {
-                    type: "button",
-                    size: "sm",
-                    variant: "secondary",
-                    disabled: disabled || !data?.repositories.length,
-                    style: { width: 132, justifyContent: "center" },
-                    onClick: () => {
-                      disarm();
-                      setCreating((value) => !value);
-                    },
-                    children: "New worktree"
-                  }
-                )
-              ] })
+        /* @__PURE__ */ jsx("header", { style: stack, children: /* @__PURE__ */ jsxs("div", { style: { ...row, justifyContent: "space-between", alignItems: "flex-start" }, children: [
+          /* @__PURE__ */ jsx("strong", { children: "Timber" }),
+          /* @__PURE__ */ jsxs("div", { style: { display: "grid", justifyItems: "end", gap: 6 }, children: [
+            /* @__PURE__ */ jsxs("div", { style: row, children: [
+              /* @__PURE__ */ jsx(
+                "span",
+                {
+                  title: data ? `${data.host} \xB7 ${host2.state.profile.get()}
+${data.hermes_home}` : void 0,
+                  children: /* @__PURE__ */ jsx(Badge, { variant: ready ? "muted" : "warn", children: !online ? "Offline" : authenticationRequired ? "Sign-in required" : listing.isError ? "Stale" : "Connected" })
+                }
+              ),
+              /* @__PURE__ */ jsx(
+                Button,
+                {
+                  type: "button",
+                  size: "xs",
+                  variant: "ghost",
+                  disabled: !online || busy,
+                  "aria-label": authenticationRequired ? "Retry after sign-in" : "Refresh",
+                  title: authenticationRequired ? "Retry after sign-in" : "Reload worktrees",
+                  onClick: () => {
+                    void refresh().then(() => {
+                      if (current()) {
+                        setError(null);
+                        setBlockedCreate(false);
+                        setBlockedAdd(false);
+                      }
+                    }).catch((failure) => {
+                      if (current())
+                        setError((previous) => previous ?? message(failure));
+                    });
+                  },
+                  children: /* @__PURE__ */ jsx(Codicon, { name: "refresh" })
+                }
+              )
+            ] }),
+            /* @__PURE__ */ jsxs("div", { style: { ...row, justifyContent: "flex-end" }, children: [
+              added && /* @__PURE__ */ jsx(
+                "span",
+                {
+                  role: "status",
+                  "aria-label": "Repository added",
+                  title: "Repository added",
+                  style: { color: "#22c55e" },
+                  children: /* @__PURE__ */ jsx(Codicon, { name: "check" })
+                }
+              ),
+              /* @__PURE__ */ jsx(
+                Button,
+                {
+                  type: "button",
+                  size: "sm",
+                  variant: "secondary",
+                  disabled,
+                  style: { width: 132, justifyContent: "center" },
+                  onClick: () => {
+                    disarm();
+                    setAdding((value) => !value);
+                  },
+                  children: "Add repository"
+                }
+              ),
+              created && /* @__PURE__ */ jsx(
+                "span",
+                {
+                  role: "status",
+                  "aria-label": "Worktree created",
+                  title: "Worktree created",
+                  style: { color: "#22c55e" },
+                  children: /* @__PURE__ */ jsx(Codicon, { name: "check" })
+                }
+              ),
+              /* @__PURE__ */ jsx(
+                Button,
+                {
+                  type: "button",
+                  size: "sm",
+                  variant: "secondary",
+                  disabled: disabled || !data?.repositories.length,
+                  style: { width: 132, justifyContent: "center" },
+                  onClick: () => {
+                    disarm();
+                    setCreating((value) => !value);
+                  },
+                  children: "New worktree"
+                }
+              )
             ] })
-          ] }),
-          data && /* @__PURE__ */ jsxs("div", { style: muted, children: [
-            data.host,
-            " \xB7 ",
-            host2.state.profile.get(),
-            /* @__PURE__ */ jsx("br", {}),
-            data.hermes_home
           ] })
-        ] }),
+        ] }) }),
         !online && /* @__PURE__ */ jsx("p", { role: "status", children: "Gateway offline. Cached results are stale. Actions are disabled." }),
         listing.isPending && online && /* @__PURE__ */ jsx("p", { role: "status", children: "Loading worktrees\u2026" }),
         authenticationRequired && /* @__PURE__ */ jsx("p", { role: "alert", children: "Gateway sign-in or permission is required. Automatic requests are paused. Sign in through Hermes Connections, then select Retry after sign-in. Cached results are stale and actions are disabled." }),

@@ -485,15 +485,23 @@ function ScopedPanel({
           <strong>Timber</strong>
           <div style={{ display: "grid", justifyItems: "end", gap: 6 }}>
             <div style={row}>
-              <Badge variant={ready ? "muted" : "warn"}>
-                {!online
-                  ? "Offline"
-                  : authenticationRequired
-                    ? "Sign-in required"
-                    : listing.isError
-                      ? "Stale"
-                      : "Connected"}
-              </Badge>
+              <span
+                title={
+                  data
+                    ? `${data.host} · ${host.state.profile.get()}\n${data.hermes_home}`
+                    : undefined
+                }
+              >
+                <Badge variant={ready ? "muted" : "warn"}>
+                  {!online
+                    ? "Offline"
+                    : authenticationRequired
+                      ? "Sign-in required"
+                      : listing.isError
+                        ? "Stale"
+                        : "Connected"}
+                </Badge>
+              </span>
               <Button
                 type="button"
                 size="xs"
@@ -549,8 +557,6 @@ function ScopedPanel({
               >
                 Add repository
               </Button>
-            </div>
-            <div style={{ ...row, justifyContent: "flex-end" }}>
               {created && (
                 <span
                   role="status"
@@ -577,13 +583,6 @@ function ScopedPanel({
             </div>
           </div>
         </div>
-        {data && (
-          <div style={muted}>
-            {data.host} · {host.state.profile.get()}
-            <br />
-            {data.hermes_home}
-          </div>
-        )}
       </header>
       {!online && (
         <p role="status">
