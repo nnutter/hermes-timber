@@ -27,6 +27,12 @@ TOKEN_LIFETIME = 120
 COMMAND_TIMEOUT = 60
 
 
+class ReviewProgress(BaseModel):
+	model_config = ConfigDict(extra="forbid", strict=True)
+	approved: int
+	total: int
+
+
 class Worktree(BaseModel):
 	model_config = ConfigDict(extra="forbid", strict=True)
 	name: str
@@ -42,6 +48,7 @@ class Worktree(BaseModel):
 	todoDone: int = 0
 	todoTotal: int = 0
 	pullRequest: str = ""
+	review: ReviewProgress | None = None
 
 
 class State(BaseModel):

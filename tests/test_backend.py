@@ -144,6 +144,43 @@ def test_direct_loader_import(sandbox: Sandbox) -> None:
 		sys.modules.pop(spec.name)
 
 
+def test_state_accepts_timber_review_progress(
+	sandbox: Sandbox, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	review = {"approved": 2, "total": 4}
+	worktree = {
+		"name": "reviewed",
+		"repo": "example/demo",
+		"path": str(sandbox.root / "home/worktrees/example/demo/reviewed"),
+		"upstream": "origin/main",
+		"ahead": 1,
+		"behind": 0,
+		"commit": "0123456789abcdef0123456789abcdef01234567",
+		"clean": True,
+		"merged": False,
+		"statusError": False,
+		"todoDone": 0,
+		"todoTotal": 1,
+		"pullRequest": "",
+		"review": review,
+	}
+
+	def list_with_review(
+		argv: list[str],
+	) -> subprocess.CompletedProcess[str]:
+		if argv == ["timber", "repo", "list", "-q"]:
+			return subprocess.CompletedProcess(argv, 0, "example/demo\n", "")
+		if argv == ["timber", "list", "--json", "--sort", "recency"]:
+			return subprocess.CompletedProcess(argv, 0, json.dumps([worktree]), "")
+		raise AssertionError(f"Unexpected Timber command: {argv}")
+
+	monkeypatch.setattr(api, "run", list_with_review)
+	response = sandbox.client.get("/state")
+
+	assert response.status_code == 200, response.text
+	assert response.json()["worktrees"][0]["review"] == review
+
+
 def test_read_only_state_and_idempotent_repo_projects(sandbox: Sandbox) -> None:
 	empty = sandbox.state()
 	assert empty.repositories == ["example/demo"]
