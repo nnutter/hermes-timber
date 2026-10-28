@@ -12,6 +12,7 @@ class ProjectFolder:
 class Project:
 	id: str
 	archived: bool
+	primary_path: str | None
 	folders: list[ProjectFolder]
 
 def connect() -> Connection: ...
@@ -27,3 +28,6 @@ def add_folder(
 	is_primary: bool = False,
 ) -> str: ...
 def remove_folder(conn: Connection, project_id: str, path: str) -> bool: ...
+def project_for_path(
+	conn: Connection, path: str, *, include_archived: bool = False
+) -> Project | None: ...

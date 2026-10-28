@@ -7,6 +7,7 @@ import fcntl
 import functools
 import hashlib
 import json
+import os
 import re
 import secrets
 import socket
@@ -300,6 +301,11 @@ def get_state() -> State:
 	return state(listing(), mappings(), [])
 
 
+def _worktree_base_path(repo: str) -> Path:
+	root = os.environ.get("TIMBER_WORKTREE_ROOT") or str(Path.home() / "worktrees")
+	return Path(root) / repo
+
+
 def fingerprint(path: str, label: str | None, primary: bool, added: int) -> str:
 	return json.dumps([path, label, primary, added])
 
@@ -318,7 +324,9 @@ def reconcile(
 			str(repo): str(pid) for repo, pid in db.execute("SELECT repo,project FROM mappings")
 		}
 		for repo in items.repositories:
+			base = _worktree_base_path(repo)
 			paths = {wt.path for wt in items.worktrees if wt.repo == repo}
+			paths.add(str(base))
 			pid = mapping.get(repo)
 			if pid is None and not prune_only:
 				candidates = [p for p in all_projects if any(f.path in paths for f in p.folders)]
@@ -404,7 +412,10 @@ def reconcile(
 						)
 			if prune_only:
 				continue
-			for path in sorted(paths - folders.keys() - owned.keys()):
+			for path in sorted(
+				paths - folders.keys() - owned.keys(),
+				key=lambda candidate: (candidate == str(base), candidate),
+			):
 				# Do not attach a folder that the user assigned elsewhere after mapping.
 				if any(
 					p.id != pid and any(f.path == path for f in p.folders)
