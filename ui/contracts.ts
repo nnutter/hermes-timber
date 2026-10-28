@@ -1,3 +1,8 @@
+export interface ReviewProgress {
+  approved: number;
+  total: number;
+}
+
 export interface Worktree {
   name: string;
   repo: string;
@@ -12,6 +17,7 @@ export interface Worktree {
   todoDone?: number;
   todoTotal?: number;
   pullRequest?: string;
+  review?: ReviewProgress | null;
 }
 
 export interface TimberState {
@@ -41,6 +47,18 @@ function strings(value: unknown): value is string[] {
   );
 }
 
+function isReviewProgress(value: unknown): value is ReviewProgress {
+  return (
+    record(value) &&
+    typeof value.approved === "number" &&
+    Number.isInteger(value.approved) &&
+    value.approved >= 0 &&
+    typeof value.total === "number" &&
+    Number.isInteger(value.total) &&
+    value.total >= 0
+  );
+}
+
 export function isWorktree(value: unknown): value is Worktree {
   if (!record(value)) return false;
   return (
@@ -56,7 +74,11 @@ export function isWorktree(value: unknown): value is Worktree {
         value[key] === undefined ||
         (typeof value[key] === "number" && Number.isFinite(value[key])),
     ) &&
-    (value.pullRequest === undefined || typeof value.pullRequest === "string")
+    (value.pullRequest === undefined ||
+      typeof value.pullRequest === "string") &&
+    (value.review === undefined ||
+      value.review === null ||
+      isReviewProgress(value.review))
   );
 }
 

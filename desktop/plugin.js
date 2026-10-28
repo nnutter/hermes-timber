@@ -26,13 +26,16 @@ function record(value) {
 function strings(value) {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
+function isReviewProgress(value) {
+  return record(value) && typeof value.approved === "number" && Number.isInteger(value.approved) && value.approved >= 0 && typeof value.total === "number" && Number.isInteger(value.total) && value.total >= 0;
+}
 function isWorktree(value) {
   if (!record(value)) return false;
   return ["name", "repo", "path"].every((key) => typeof value[key] === "string") && typeof value.clean === "boolean" && typeof value.merged === "boolean" && ["upstream", "commit"].every(
     (key) => value[key] == null || typeof value[key] === "string"
   ) && typeof value.statusError === "boolean" && ["ahead", "behind", "todoDone", "todoTotal"].every(
     (key) => value[key] === void 0 || typeof value[key] === "number" && Number.isFinite(value[key])
-  ) && (value.pullRequest === void 0 || typeof value.pullRequest === "string");
+  ) && (value.pullRequest === void 0 || typeof value.pullRequest === "string") && (value.review === void 0 || value.review === null || isReviewProgress(value.review));
 }
 function parseState(value) {
   if (!record(value) || typeof value.host !== "string" || typeof value.hermes_home !== "string" || !strings(value.repositories) || !Array.isArray(value.worktrees) || !value.worktrees.every(isWorktree) || !record(value.projects) || !Object.values(value.projects).every((item) => typeof item === "string") || !strings(value.warnings))
@@ -847,9 +850,9 @@ ${data.hermes_home}` : void 0,
                     {
                       style: {
                         display: "grid",
-                        gridTemplateColumns: "max-content 70px 80px 80px minmax(0, 1fr) max-content",
+                        gridTemplateColumns: "max-content 64px 70px 60px 64px minmax(0, 1fr) max-content",
                         alignItems: "center",
-                        columnGap: 10,
+                        columnGap: 6,
                         overflowX: "auto"
                       },
                       children: [
@@ -915,6 +918,27 @@ ${data.hermes_home}` : void 0,
                                 ]
                               }
                             )
+                          }
+                        ),
+                        /* @__PURE__ */ jsxs(
+                          "span",
+                          {
+                            role: "img",
+                            "aria-label": worktree.review ? `Review ${worktree.review.approved} of ${worktree.review.total} commits approved` : "Review status unknown",
+                            title: worktree.review ? `Review ${worktree.review.approved} of ${worktree.review.total} commits approved` : "Review status unknown",
+                            style: {
+                              ...muted,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              gap: 4,
+                              minWidth: 0,
+                              whiteSpace: "nowrap"
+                            },
+                            children: [
+                              /* @__PURE__ */ jsx(Codicon, { name: "eye" }),
+                              worktree.review ? `${worktree.review.approved}/${worktree.review.total}` : "?"
+                            ]
                           }
                         ),
                         /* @__PURE__ */ jsx("span", { style: muted, children: worktree.pullRequest ? `PR ${worktree.pullRequest}` : "" }),
