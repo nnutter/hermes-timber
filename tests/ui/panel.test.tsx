@@ -495,6 +495,40 @@ describe("Timber desktop panel", () => {
     );
   });
 
+  it("shows review progress after TODO and marks missing status as unknown", async () => {
+    const reviewed = { ...clean, review: { approved: 2, total: 4 } };
+    rest.mockResolvedValue({ ...state, worktrees: [reviewed, dirty] });
+    mount();
+    await loaded();
+
+    const list = screen.getByRole("list", { name: "Worktrees" });
+    const todo = within(list).getByLabelText("TODO 2 of 3 done");
+    const review = within(list).getByRole("img", {
+      name: "Review 2 of 4 commits approved",
+    });
+    expect(review).toHaveTextContent("2/4");
+    expect(review.querySelector('[data-icon="eye"]')).toBeInTheDocument();
+    expect(
+      todo.compareDocumentPosition(review) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      within(list).getByRole("img", { name: "Review status unknown" }),
+    ).toHaveTextContent("?");
+  });
+
+  it("rejects malformed review counts from the backend", async () => {
+    const malformed = { ...clean, review: { approved: "2", total: 4 } };
+    rest.mockResolvedValue({ ...state, worktrees: [malformed] });
+    mount();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "invalid state response",
+    );
+    expect(
+      screen.getByRole("button", { name: "Add repository" }),
+    ).toBeDisabled();
+  });
+
   it("creates with Timber-selected branch and explicit upstream, then refreshes", async () => {
     const user = userEvent.setup();
     rest

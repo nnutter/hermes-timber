@@ -64,6 +64,10 @@ class Sandbox:
 		return api.State.model_validate(response.json())
 
 
+def timber_worktree_base(sandbox: Sandbox, repo: str = "example/demo") -> Path:
+	return sandbox.root / "home/worktrees" / repo
+
+
 @pytest.fixture
 def sandbox(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[Sandbox]:
 	assert shutil.which("timber") is not None, "Install Timber for real boundary tests"
@@ -144,6 +148,43 @@ def test_direct_loader_import(sandbox: Sandbox) -> None:
 		sys.modules.pop(spec.name)
 
 
+def test_state_accepts_timber_review_progress(
+	sandbox: Sandbox, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	review = {"approved": 2, "total": 4}
+	worktree = {
+		"name": "reviewed",
+		"repo": "example/demo",
+		"path": str(sandbox.root / "home/worktrees/example/demo/reviewed"),
+		"upstream": "origin/main",
+		"ahead": 1,
+		"behind": 0,
+		"commit": "0123456789abcdef0123456789abcdef01234567",
+		"clean": True,
+		"merged": False,
+		"statusError": False,
+		"todoDone": 0,
+		"todoTotal": 1,
+		"pullRequest": "",
+		"review": review,
+	}
+
+	def list_with_review(
+		argv: list[str],
+	) -> subprocess.CompletedProcess[str]:
+		if argv == ["timber", "repo", "list", "-q"]:
+			return subprocess.CompletedProcess(argv, 0, "example/demo\n", "")
+		if argv == ["timber", "list", "--json", "--sort", "recency"]:
+			return subprocess.CompletedProcess(argv, 0, json.dumps([worktree]), "")
+		raise AssertionError(f"Unexpected Timber command: {argv}")
+
+	monkeypatch.setattr(api, "run", list_with_review)
+	response = sandbox.client.get("/state")
+
+	assert response.status_code == 200, response.text
+	assert response.json()["worktrees"][0]["review"] == review
+
+
 def test_read_only_state_and_idempotent_repo_projects(sandbox: Sandbox) -> None:
 	empty = sandbox.state()
 	assert empty.repositories == ["example/demo"]
@@ -162,7 +203,16 @@ def test_read_only_state_and_idempotent_repo_projects(sandbox: Sandbox) -> None:
 	with contextlib.closing(projects_db.connect()) as db:
 		projects = projects_db.list_projects(db)
 		assert len(projects) == 1
-		assert {f.path for f in projects[0].folders} == {wt.path, second.path}
+		worktree_base = timber_worktree_base(sandbox)
+		assert {f.path for f in projects[0].folders} == {
+			str(worktree_base),
+			wt.path,
+			second.path,
+		}
+		assert projects[0].primary_path in {wt.path, second.path}
+		future_checkout = worktree_base / "future-branch/demo/src"
+		owner = projects_db.project_for_path(db, str(future_checkout))
+		assert owner is not None and owner.id == projects[0].id
 		before = db.execute("SELECT * FROM project_folders ORDER BY path").fetchall()
 	assert sandbox.client.post("/sync", json={}).status_code == 200
 	assert sandbox.state().projects == mapping
@@ -188,7 +238,7 @@ def test_approved_removal_keeps_project_and_rejects_replay(sandbox: Sandbox) -> 
 	with contextlib.closing(projects_db.connect()) as db:
 		project = projects_db.get_project(db, pid)
 		assert project is not None and not project.archived
-		assert project.folders == []
+		assert [folder.path for folder in project.folders] == [str(timber_worktree_base(sandbox))]
 	# The real local branch, not only its checkout, must be gone.
 	bare = sandbox.root / "home/worktrees/example/demo/.git"
 	assert (
@@ -263,7 +313,10 @@ def test_sync_preserves_detached_worktree_folder(sandbox: Sandbox) -> None:
 	assert response.status_code == 200, response.text
 	with contextlib.closing(projects_db.connect()) as db:
 		project = projects_db.get_project(db, pid)
-		assert project is not None and [folder.path for folder in project.folders] == [wt.path]
+		assert project is not None and {folder.path for folder in project.folders} == {
+			wt.path,
+			str(timber_worktree_base(sandbox)),
+		}
 	assert path.is_dir()
 	assert api.State.model_validate(response.json()).warnings
 
@@ -331,7 +384,11 @@ def test_ownership_preserves_existing_and_edited_folders(sandbox: Sandbox) -> No
 	with contextlib.closing(projects_db.connect()) as db:
 		project = projects_db.get_project(db, pid)
 		assert project is not None
-		assert {f.path for f in project.folders} == {wt.path, added.path}
+		assert {f.path for f in project.folders} == {
+			wt.path,
+			added.path,
+			str(timber_worktree_base(sandbox)),
+		}
 		assert next(f.label for f in project.folders if f.path == added.path) == "User label"
 
 
@@ -343,7 +400,9 @@ def test_user_deleted_owned_folder_stays_deleted(sandbox: Sandbox) -> None:
 	assert sandbox.client.post("/sync", json={}).status_code == 200
 	with contextlib.closing(projects_db.connect()) as db:
 		project = projects_db.get_project(db, pid)
-		assert project is not None and project.folders == []
+		assert project is not None and [folder.path for folder in project.folders] == [
+			str(timber_worktree_base(sandbox))
+		]
 
 
 def test_ambiguous_existing_projects_are_not_adopted(sandbox: Sandbox) -> None:
@@ -397,7 +456,10 @@ def test_listing_failure_does_not_prune(
 	assert response.status_code == 502
 	with contextlib.closing(projects_db.connect()) as db:
 		project = projects_db.get_project(db, pid)
-		assert project is not None and [f.path for f in project.folders] == [wt.path]
+		assert project is not None and {f.path for f in project.folders} == {
+			wt.path,
+			str(timber_worktree_base(sandbox)),
+		}
 
 
 def test_partial_creation_is_reported_not_retried(
@@ -498,7 +560,10 @@ def test_remove_failure_preserves_checkout_and_membership(
 	assert Path(wt.path).is_dir()
 	with contextlib.closing(projects_db.connect()) as db:
 		project = projects_db.get_project(db, pid)
-		assert project is not None and [folder.path for folder in project.folders] == [wt.path]
+		assert project is not None and {folder.path for folder in project.folders} == {
+			wt.path,
+			str(timber_worktree_base(sandbox)),
+		}
 	assert sandbox.client.post("/remove", json={"token": token}).status_code == 409
 
 

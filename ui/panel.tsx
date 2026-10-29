@@ -823,9 +823,9 @@ function ScopedPanel({
               style={{
                 display: "grid",
                 gridTemplateColumns:
-                  "max-content 70px 80px 80px minmax(0, 1fr) max-content",
+                  "max-content 64px 70px 60px 64px minmax(0, 1fr) max-content",
                 alignItems: "center",
-                columnGap: 10,
+                columnGap: 6,
                 overflowX: "auto",
               }}
             >
@@ -886,6 +886,33 @@ function ScopedPanel({
                     {worktree.todoTotal}
                   </span>
                 )}
+              </span>
+              <span
+                role="img"
+                aria-label={
+                  worktree.review
+                    ? `Review ${worktree.review.approved} of ${worktree.review.total} commits approved`
+                    : "Review status unknown"
+                }
+                title={
+                  worktree.review
+                    ? `Review ${worktree.review.approved} of ${worktree.review.total} commits approved`
+                    : "Review status unknown"
+                }
+                style={{
+                  ...muted,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 4,
+                  minWidth: 0,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <Codicon name="eye" />
+                {worktree.review
+                  ? `${worktree.review.approved}/${worktree.review.total}`
+                  : "?"}
               </span>
               <span style={muted}>
                 {worktree.pullRequest ? `PR ${worktree.pullRequest}` : ""}

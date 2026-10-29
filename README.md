@@ -1,7 +1,7 @@
 # Hermes Timber
 
 Manage Timber worktrees from a native Hermes Desktop panel.
-Each repository maps to one Hermes Project, with its worktrees as Project folders.
+Each repository maps to one Hermes Project, with Timber's worktree base folder and any out-of-base checkouts associated as Project folders.
 
 ## Develop
 
@@ -104,6 +104,8 @@ Existing Timber configuration can still run repository setup during creation.
 
 Run **Sync Projects** from the command palette to reconcile existing worktrees with Hermes Projects, even when the Timber panel is closed.
 Listing worktrees does not create or modify Projects.
+Sync associates `$TIMBER_WORKTREE_ROOT/<repo-name>` (default `~/worktrees/<repo-name>`) so sessions in Timber-managed checkouts inherit the repository Project.
+Checkouts outside that base folder are associated individually.
 The plugin records the folder associations it creates and preserves associations that it does not own.
 Empty repository Projects remain available after cleanup.
 
