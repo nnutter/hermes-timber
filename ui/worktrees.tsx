@@ -190,7 +190,6 @@ export function WorktreeView({
   const [prTitle, setPrTitle] = useState("");
   const [prBody, setPrBody] = useState("");
   const [preview, setPreview] = useState<RemovePreview | null>(null);
-  const [notice, setNotice] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [blockedCreate, setBlockedCreate] = useState(false);
   const [blockedAdd, setBlockedAdd] = useState(false);
@@ -291,6 +290,15 @@ export function WorktreeView({
     if (refreshed.error) throw refreshed.error;
     assertScope(scope);
   };
+  const notify = (kind: "success" | "warning", message: string) => {
+    host.notify({ kind, message });
+  };
+  const notifyAction = (warnings: string[], message: string) => {
+    notify(
+      warnings.length ? "warning" : "success",
+      [message, ...warnings].join("\n"),
+    );
+  };
   useEffect(() => {
     if (!ready || !data || collected.current) return;
     if (data.fetchedAt !== null && data.prsAt !== null) {
@@ -319,7 +327,6 @@ export function WorktreeView({
     if ((kind === "create" && blockedCreate) || (kind === "add" && blockedAdd))
       return;
     if (id !== null) start(id);
-    setNotice([]);
     void (async () => {
       try {
         await action();
@@ -380,9 +387,10 @@ export function WorktreeView({
           [worktree.path]: Date.now(),
         }));
         if (announce)
-          setNotice([
+          notify(
+            "success",
             `Opened the latest session in ${worktree.name}@${worktree.repo}.`,
-          ]);
+          );
         return;
       }
     } catch {
@@ -437,7 +445,7 @@ export function WorktreeView({
       [worktree.path]: Date.now(),
     }));
     if (announce)
-      setNotice([`Opened ${worktree.name}@${worktree.repo} in Hermes.`]);
+      notify("success", `Opened ${worktree.name}@${worktree.repo} in Hermes.`);
   }
 
   async function prepareRemove(worktree: Worktree) {
@@ -500,7 +508,7 @@ export function WorktreeView({
           : ` Archived ${answer.archived} of ${many}.`;
       }
     } catch {
-      // A failed archive leaves the removal done; the notice says so.
+      // A failed archive leaves the removal done; the toast says so.
     }
     return "";
   }
@@ -525,10 +533,10 @@ export function WorktreeView({
         if (!record(result) || !result.removed)
           throw new Error("The backend did not confirm removal.");
         const archived = await archiveSessions(worktree.path);
-        setNotice([
-          ...responseWarnings(result),
+        notifyAction(
+          responseWarnings(result),
           `Removed ${worktree.name}@${worktree.repo}.${archived}`,
-        ]);
+        );
         await refresh();
       });
     } else {
@@ -561,15 +569,18 @@ export function WorktreeView({
         await refresh();
         try {
           await open(created, false);
-          setNotice([
+          notifyAction(
+            createdWarnings,
             `Created ${created.name}@${created.repo}.`,
-            ...createdWarnings,
-          ]);
+          );
         } catch (failure) {
-          setNotice([
-            `Created ${created.name}@${created.repo}, but its session did not open: ${message(failure)}`,
-            ...createdWarnings,
-          ]);
+          notify(
+            "warning",
+            [
+              `Created ${created.name}@${created.repo}, but its session did not open: ${message(failure)}`,
+              ...createdWarnings,
+            ].join("\n"),
+          );
         }
       },
       "create",
@@ -599,7 +610,10 @@ export function WorktreeView({
         setSource("");
         setRepoName("");
         setAlias("");
-        setNotice(responseWarnings(response));
+        notifyAction(
+          responseWarnings(response),
+          `Added repository ${response.repository}.`,
+        );
         await refresh();
       },
       "add",
@@ -624,7 +638,14 @@ export function WorktreeView({
         result.worktrees === 0
           ? ""
           : ` Moved ${result.worktrees} worktree folder${result.worktrees === 1 ? "" : "s"}; sessions in the old ones no longer open them.`;
-      setNotice([`Renamed ${repo} to ${result.to}.${moved}`]);
+      notifyAction(
+        Array.isArray(result.warnings)
+          ? result.warnings.filter(
+              (item): item is string => typeof item === "string",
+            )
+          : [],
+        `Renamed ${repo} to ${result.to}.${moved}`,
+      );
       setRenaming(null);
       setRenameTo("");
       setCreateRepo("");
@@ -637,7 +658,7 @@ export function WorktreeView({
       const result = await post("/repo-remove", { repo });
       if (!record(result) || result.removed !== repo)
         throw new Error("The backend did not confirm repository removal.");
-      setNotice([`Removed repository ${repo}.`]);
+      notify("success", `Removed repository ${repo}.`);
       setRenaming(null);
       setCreateRepo("");
       await refresh();
@@ -653,9 +674,10 @@ export function WorktreeView({
       if (!record(result) || result.pushed !== true)
         throw new Error("The backend did not confirm the push.");
       if (!applyState(result.state)) await refresh();
-      setNotice([
+      notify(
+        "success",
         `Pushed ${worktree.name}@${worktree.repo} to origin/${worktree.name}.`,
-      ]);
+      );
     });
   }
 
@@ -672,9 +694,10 @@ export function WorktreeView({
       )
         throw new Error("The backend did not confirm the rebase.");
       if (!applyState(result.state)) await refresh();
-      setNotice([
+      notify(
+        "success",
         `Rebased ${worktree.name}@${worktree.repo} onto ${result.upstream}.`,
-      ]);
+      );
     });
   }
 
@@ -692,13 +715,14 @@ export function WorktreeView({
       )
         throw new Error("The backend did not confirm the merge.");
       if (!applyState(result.state)) await refresh();
-      setNotice([
+      notify(
+        "success",
         result.whole === true
           ? `Merged the whole stack through PR #${result.merged}.`
           : result.stack === true
             ? `Merged the stack up to PR #${result.merged}.`
             : `Merged PR #${result.merged}.`,
-      ]);
+      );
     });
   }
 
@@ -714,9 +738,10 @@ export function WorktreeView({
       setPrWorktree(null);
       setPrTitle("");
       setPrBody("");
-      setNotice([
+      notify(
+        "success",
         `${created.created ? "Created" : "Found"} PR #${created.number}: ${created.url}`,
-      ]);
+      );
       await refresh();
     });
   }
@@ -1000,15 +1025,6 @@ export function WorktreeView({
             {(blockedAdd || blockedCreate) &&
               " The operation may have partially completed. Review the listing, then use Refresh before retrying."}
           </p>
-        )}
-        {notice.length > 0 && (
-          <div role="status">
-            {notice.map((text, index) => (
-              <p key={index} style={index ? muted : undefined}>
-                {text}
-              </p>
-            ))}
-          </div>
         )}
         {data?.warnings.length ? (
           <div aria-label="Backend warnings">
@@ -1670,7 +1686,8 @@ export function WorktreeView({
                   : [];
               await refresh();
               if (errors.length)
-                setNotice([`Fetch reported: ${errors.join("; ")}`]);
+                notify("warning", `Fetch reported: ${errors.join("; ")}`);
+              else notify("success", "Worktrees and remotes refreshed.");
               setError(null);
               setBlockedCreate(false);
               setBlockedAdd(false);

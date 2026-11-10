@@ -330,7 +330,12 @@ describe("Timber worktrees", () => {
         body: { repo: "app", name: "behind" },
       }),
     );
-    await screen.findByText("Rebased behind@app onto origin/main.");
+    await waitFor(() =>
+      expect(host.notify).toHaveBeenCalledWith({
+        kind: "success",
+        message: "Rebased behind@app onto origin/main.",
+      }),
+    );
   });
 
   it("creates a worktree and opens its session", async () => {
@@ -370,13 +375,22 @@ describe("Timber worktrees", () => {
         body: { repo: "empty", name: "", upstream: "origin/main" },
       }),
     );
-    await screen.findByText("Created done@app.");
+    await waitFor(() =>
+      expect(host.notify).toHaveBeenCalledWith({
+        kind: "warning",
+        message: expect.stringContaining("Created done@app."),
+      }),
+    );
+    expect(
+      host.notify.mock.calls.some(([input]) =>
+        input.message.includes("Project synchronized"),
+      ),
+    ).toBe(true);
     expect(host.openSession).toHaveBeenCalledWith(
       "s1",
       expect.objectContaining({ profile: "default" }),
     );
     await screen.findByText("1 of 1 worktrees");
-    expect(screen.getByText("Project synchronized")).toBeVisible();
   });
 
   it("blocks create retries until a refresh clears the uncertainty", async () => {
@@ -440,7 +454,12 @@ describe("Timber worktrees", () => {
         body: { source: "/tmp/origin", name: "new/repo", alias: "short" },
       }),
     );
-    await screen.findByText("Project sync failed");
+    await waitFor(() =>
+      expect(host.notify).toHaveBeenCalledWith({
+        kind: "warning",
+        message: expect.stringContaining("Project sync failed"),
+      }),
+    );
   });
 
   it("previews and confirms a removal with a token", async () => {
@@ -476,7 +495,12 @@ describe("Timber worktrees", () => {
         body: { token: "token" },
       }),
     );
-    await screen.findByText("Removed done@app. Archived 1 session.");
+    await waitFor(() =>
+      expect(host.notify).toHaveBeenCalledWith({
+        kind: "success",
+        message: "Removed done@app. Archived 1 session.",
+      }),
+    );
   });
 
   it("opens the newest session already in the worktree folder", async () => {
@@ -499,7 +523,12 @@ describe("Timber worktrees", () => {
       ),
     );
     expect(host.request).not.toHaveBeenCalled();
-    await screen.findByText("Opened the latest session in done@app.");
+    await waitFor(() =>
+      expect(host.notify).toHaveBeenCalledWith({
+        kind: "success",
+        message: "Opened the latest session in done@app.",
+      }),
+    );
   });
 
   it("refuses an opened session whose cwd was not confirmed", async () => {
