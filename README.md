@@ -5,31 +5,38 @@ Each repository maps to one Hermes Project, with Timber's worktree base folder a
 
 ## Develop
 
-Install `mise`, `uv`, Git, and [Timber](https://github.com/nnutter/timber) first.
+Install `mise`, Git, and [Timber](https://github.com/nnutter/timber) first.
 Then run:
 
 ```sh
 mise trust
 mise install
-uv python install
-uv sync --locked
-mise exec -- npm ci
-uv run invoke fix
-uv run invoke build
-uv run invoke check
-uv run invoke test
+mise run setup
+mise run fix
+mise run build
+mise run check
+mise run test
+mise run doctor
+mise run smoke
 ```
 
-`mise.toml` pins Node.
+`mise.toml` pins Python, Node, and the development tools.
+`hk.pkl` is the single place that names the formatters, linters, and file patterns.
+`mise run fix` and `mise run check` delegate to `hk`; `mise run lint` and `mise run fmt` alias those commands.
 `uv` manages Python and the development dependencies.
-Invoke is the task entrypoint.
-The npm scripts are implementation details used by Invoke.
+Invoke is the task entrypoint for builds, packaging, and Hermes runtime checks.
+The npm scripts are implementation details used by Invoke and hk.
+The git hooks check and fix the staged files, and the `commit-msg` hook adds or preserves the Change-Id used by Timber review.
+
+`mise run doctor` validates the plugin with Hermes's real Plugin Doctor.
+`mise run smoke` exercises registration and the dashboard routes through the selected Hermes environment's Python with a temporary `HERMES_HOME`.
 
 The TypeScript configuration enables `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, and unused-code checks.
 The build bundles `ui/plugin.tsx` into `desktop/plugin.js` and leaves the three Hermes-supported imports external.
 The generated JavaScript is committed because the Hermes plugin loader does not compile TypeScript.
 The backend tests require a Hermes checkout at `~/.hermes/hermes-agent`, or a path supplied through `HERMES_SOURCE`.
 They use real Timber and Git with isolated homes and local origins.
+Set `HERMES_PYTHON` to override the interpreter that `mise run smoke` uses.
 
 ## Sync the Desktop UI from frame
 
@@ -96,7 +103,8 @@ It excludes Node modules, the Python environment, development tools, and tests.
 ## Use the panel
 
 Use **Add repository** to register a gateway-local path or remote URL; credentials in URLs are rejected.
-Adding a repository also syncs Projects. If sync fails, the repository remains registered.
+Adding a repository also syncs Projects.
+If sync fails, the repository remains registered.
 Create worktrees from a registered repository.
 Leave the branch name empty to let Timber choose a name.
 The plugin uses `--no-herdr` and does not enable mise trust or repository hooks.
@@ -126,7 +134,10 @@ Do not use cleanup as a backup for local notes or commits.
 
 ## Repository HTTP contract
 
-`POST /repositories` accepts `{"source": "URL or path", "name": "", "alias": ""}`; name and alias are optional. It returns `{"repository": "registered name", "warnings": []}` only after a clean command and listing confirm one new repository. On failure or an uncertain outcome it returns an error; refresh and inspect Timber before retrying. No repository is removed automatically.
+`POST /repositories` accepts `{"source": "URL or path", "name": "", "alias": ""}`; name and alias are optional.
+It returns `{"repository": "registered name", "warnings": []}` only after a clean command and listing confirm one new repository.
+On failure or an uncertain outcome it returns an error; refresh and inspect Timber before retrying.
+No repository is removed automatically.
 
 ## Explore the code
 
@@ -134,7 +145,9 @@ Do not use cleanup as a backup for local notes or commits.
 - `dashboard/plugin_api.py` owns the backend routes, Timber operations, and Project reconciliation.
 - `typings/` describes the Hermes Python APIs consumed by the backend.
 - `tests/` protects the backend contracts and Desktop user actions.
-- `tasks.py` owns the development and packaging commands.
+- `mise.toml` and `hk.pkl` own the development environment and file checks.
+- `tasks.py` owns the development, packaging, and Hermes runtime commands.
+- `scripts/smoke.py` exercises the installed plugin contracts through Hermes's Python.
 
 Hermes owns the Projects database schema.
 The plugin uses Hermes' Project functions instead of editing that schema directly.
