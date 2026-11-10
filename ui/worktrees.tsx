@@ -772,7 +772,7 @@ export function WorktreeView({
               }}
               style={{ ...iconButton(TOOLBAR_HEIGHT), ...splitPart }}
             >
-              <NewWorktreeIcon size={16} />
+              <NewWorktreeIcon size={20} />
             </Button>
             <span
               aria-hidden="true"
@@ -807,7 +807,7 @@ export function WorktreeView({
                   setAdding(true);
                 }}
               >
-                <ImportRepoIcon size={16} />
+                <ImportRepoIcon size={18} />
                 <span>Import repo</span>
               </button>
               <div aria-hidden="true" style={menuSeparatorStyle} />
@@ -1830,7 +1830,7 @@ function StackLines({
                 style={{ ...iconButton(24), color }}
                 onClick={() => onMerge(entry)}
               >
-                <MergeIcon size={14} />
+                <MergeIcon size={16} />
               </Button>
             )}
           </div>

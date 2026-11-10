@@ -773,13 +773,17 @@ var IMPORT_REPO_PATHS = [
   "M1 2.5A2.5 2.5 0 0 1 3.5 0h8.75a.75.75 0 0 1 .75.75V6a.75.75 0 0 1-1.5 0V1.5h-8a1 1 0 0 0-1 1v6.708A2.486 2.486 0 0 1 3.5 9h3a.75.75 0 0 1 0 1.5h-3a1 1 0 0 0 0 2h3a.75.75 0 0 1 0 1.5h-3A2.5 2.5 0 0 1 1 11.5v-9Z",
   "M12.21 13.479a.75.75 0 1 0 1.061 1.061l2.504-2.505a.75.75 0 0 0 0-1.061L13.271 8.47a.75.75 0 0 0-1.061 1.06l1.224 1.225H8.75a.75.75 0 1 0 0 1.5h4.685l-1.225 1.224Z"
 ];
-function Glyph({ paths, size }) {
+function Glyph({
+  paths,
+  size,
+  viewBox = "0 0 16 16"
+}) {
   return /* @__PURE__ */ jsx2(
     "svg",
     {
       width: size,
       height: size,
-      viewBox: "0 0 24 24",
+      viewBox,
       fill: "currentColor",
       "aria-hidden": "true",
       style: { flexShrink: 0 },
@@ -787,19 +791,19 @@ function Glyph({ paths, size }) {
     }
   );
 }
-function MergeIcon({ size = 16 }) {
-  return /* @__PURE__ */ jsx2(Glyph, { paths: MERGE_PATHS, size });
+function MergeIcon({ size = 18 }) {
+  return /* @__PURE__ */ jsx2(Glyph, { paths: MERGE_PATHS, size, viewBox: "0 0 24 24" });
 }
-function PushIcon({ size = 16 }) {
+function PushIcon({ size = 20 }) {
   return /* @__PURE__ */ jsx2(Glyph, { paths: PUSH_PATHS, size });
 }
-function CreatePrIcon({ size = 16 }) {
+function CreatePrIcon({ size = 20 }) {
   return /* @__PURE__ */ jsx2(Glyph, { paths: CREATE_PR_PATHS, size });
 }
-function NewWorktreeIcon({ size = 16 }) {
+function NewWorktreeIcon({ size = 20 }) {
   return /* @__PURE__ */ jsx2(Glyph, { paths: NEW_WORKTREE_PATHS, size });
 }
-function ImportRepoIcon({ size = 16 }) {
+function ImportRepoIcon({ size = 18 }) {
   return /* @__PURE__ */ jsx2(Glyph, { paths: IMPORT_REPO_PATHS, size });
 }
 
@@ -1428,7 +1432,7 @@ function WorktreeView({
                             setCreating((value) => !value);
                           },
                           style: { ...iconButton(TOOLBAR_HEIGHT), ...splitPart },
-                          children: /* @__PURE__ */ jsx3(NewWorktreeIcon, { size: 16 })
+                          children: /* @__PURE__ */ jsx3(NewWorktreeIcon, { size: 20 })
                         }
                       ),
                       /* @__PURE__ */ jsx3(
@@ -1472,7 +1476,7 @@ function WorktreeView({
                         setAdding(true);
                       },
                       children: [
-                        /* @__PURE__ */ jsx3(ImportRepoIcon, { size: 16 }),
+                        /* @__PURE__ */ jsx3(ImportRepoIcon, { size: 18 }),
                         /* @__PURE__ */ jsx3("span", { children: "Import repo" })
                       ]
                     }
@@ -2431,7 +2435,7 @@ function StackLines({
                     "aria-label": `Merge stack PR #${entry.number}`,
                     style: { ...iconButton(24), color },
                     onClick: () => onMerge(entry),
-                    children: /* @__PURE__ */ jsx3(MergeIcon, { size: 14 })
+                    children: /* @__PURE__ */ jsx3(MergeIcon, { size: 16 })
                   }
                 )
               ]

@@ -22,12 +22,20 @@ const IMPORT_REPO_PATHS = [
   "M12.21 13.479a.75.75 0 1 0 1.061 1.061l2.504-2.505a.75.75 0 0 0 0-1.061L13.271 8.47a.75.75 0 0 0-1.061 1.06l1.224 1.225H8.75a.75.75 0 1 0 0 1.5h4.685l-1.225 1.224Z",
 ];
 
-function Glyph({ paths, size }: { paths: readonly string[]; size: number }) {
+function Glyph({
+  paths,
+  size,
+  viewBox = "0 0 16 16",
+}: {
+  paths: readonly string[];
+  size: number;
+  viewBox?: string;
+}) {
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 24 24"
+      viewBox={viewBox}
       fill="currentColor"
       aria-hidden="true"
       style={{ flexShrink: 0 }}
@@ -39,22 +47,22 @@ function Glyph({ paths, size }: { paths: readonly string[]; size: number }) {
   );
 }
 
-export function MergeIcon({ size = 16 }: { size?: number }) {
-  return <Glyph paths={MERGE_PATHS} size={size} />;
+export function MergeIcon({ size = 18 }: { size?: number }) {
+  return <Glyph paths={MERGE_PATHS} size={size} viewBox="0 0 24 24" />;
 }
 
-export function PushIcon({ size = 16 }: { size?: number }) {
+export function PushIcon({ size = 20 }: { size?: number }) {
   return <Glyph paths={PUSH_PATHS} size={size} />;
 }
 
-export function CreatePrIcon({ size = 16 }: { size?: number }) {
+export function CreatePrIcon({ size = 20 }: { size?: number }) {
   return <Glyph paths={CREATE_PR_PATHS} size={size} />;
 }
 
-export function NewWorktreeIcon({ size = 16 }: { size?: number }) {
+export function NewWorktreeIcon({ size = 20 }: { size?: number }) {
   return <Glyph paths={NEW_WORKTREE_PATHS} size={size} />;
 }
 
-export function ImportRepoIcon({ size = 16 }: { size?: number }) {
+export function ImportRepoIcon({ size = 18 }: { size?: number }) {
   return <Glyph paths={IMPORT_REPO_PATHS} size={size} />;
 }
