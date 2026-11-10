@@ -1,3 +1,83 @@
+[settings]
+minimum_release_age = "0"
+
 [tools]
+# Python, uv, and Node belong to this repository's own code, so they are pinned.
+python = "3.14"
+uv = "latest"
 node = "24.22.1"
+
+# hk is pinned: hk.pkl imports an exact hk release, and hk-config targets it.
+hk = "2.11.1"
+
+ruff = "latest"
+"pypi:ty" = "latest"
+tombi = "latest"
+yamlfmt = "latest"
+pkl = "latest"
+jactionlint = "latest"
+betterleaks = "latest"
 shellcheck = "0.11.0"
+shfmt = "latest"
+# The TypeScript steps use the same releases as the npm development
+# dependencies, so hk can run them from mise without a second version pin.
+prettier = "latest"
+"npm:typescript" = "latest"
+"github:nnutter/mdlint" = "latest"
+"github:nnutter/timber" = "latest"
+
+[tasks.all]
+description = "Run fix, test, and check"
+run = [{ task = "fix" }, { task = "test" }, { task = "check" }]
+
+[tasks.test]
+description = "Run the backend and Desktop tests"
+run = "uv run invoke test"
+
+[tasks.fix]
+description = "Fix all files, or only the supplied files"
+usage = 'arg "[staged_files]" var=#true'
+run = '''
+if [ -z "${usage_staged_files:-}" ]; then
+  hk fix --all
+else
+  hk fix ${usage_staged_files}
+fi
+'''
+
+[tasks.fmt]
+description = "Alias for fix"
+run = [{ task = "fix" }]
+
+[tasks.check]
+description = "Check all files without writing fixes"
+run = "hk check --all"
+
+[tasks.lint]
+description = "Alias for check"
+run = "hk check --all"
+
+[tasks.build]
+description = "Bundle the Desktop plugin"
+run = "uv run invoke build"
+
+[tasks.setup]
+description = "Install the uv and npm environments and hk git hooks"
+run = ["uv sync", "npm ci", "hk install --mise"]
+
+[tasks.doctor]
+description = "Validate the plugin with Hermes's real runtime contracts"
+run = "uv run invoke doctor"
+
+[tasks.smoke]
+description = "Exercise plugin registration through Hermes's Python"
+run = "uv run invoke smoke"
+
+[tasks.on-start]
+description = "Pi mise-hooks: run fix, test, and check before an agent starts"
+run = [{ task = "all" }]
+
+[tasks.on-stop]
+description = "Pi mise-hooks: fix edited files, then test and check"
+usage = 'arg "[staged_files]" var=#true'
+run = ["mise run fix ${usage_staged_files}", "mise run test", "mise run check"]

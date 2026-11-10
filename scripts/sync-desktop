@@ -17,7 +17,7 @@ shell_quote() {
 }
 
 main() {
-  if (( $# != 0 )); then
+  if (($# != 0)); then
     printf 'Usage: sync-desktop (configuration is through environment variables)\n' >&2
     return 2
   fi
@@ -63,7 +63,7 @@ main() {
   remote_command+='cat desktop/plugin.js'
 
   printf 'Fetching %s:%s/desktop/plugin.js\n' "$host" "$repo" >&2
-  if ! ssh -T -o BatchMode=yes -o ConnectTimeout=10 -- "$host" "$remote_command" > "$temp_file"; then
+  if ! ssh -T -o BatchMode=yes -o ConnectTimeout=10 -- "$host" "$remote_command" >"$temp_file"; then
     printf 'Sync failed; the installed plugin was not changed.\n' >&2
     printf 'First verify your SSH login with: ssh %s hostname\n' "$host" >&2
     return 1

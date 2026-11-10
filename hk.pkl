@@ -1,0 +1,55 @@
+// Hook templates from nnutter/hk-config. Both package paths name the same
+// hk-config release, and that release targets the hk pin in mise.toml.
+amends
+  "package://github.com/nnutter/hk-config/releases/download/v2.11.1-6/hk-config@2.11.1-6#/Config.pkl"
+
+import "package://github.com/jdx/hk/releases/download/v2.11.1/hk@2.11.1#/Builtins.pkl" as Hk
+import
+  "package://github.com/nnutter/hk-config/releases/download/v2.11.1-6/hk-config@2.11.1-6#/Hooks.pkl"
+  as Hooks
+
+// Report every failing step instead of stopping at the first one, so one run
+// shows the whole set of problems.
+fail_fast = false
+
+// The generated tool sidecars under `.mise/locks/` are not project source,
+// and `pi-pocket-timber/` is a separate checkout that this repository does
+// not own.
+exclude = List(".mise/locks", "pi-pocket-timber/**")
+
+// Prettier owns TypeScript, TSX, and the JSON files the npm scripts own.
+// The default glob would also take Markdown and YAML from mdlint and yamlfmt.
+local prettier = (Hk.prettier) {
+  glob =
+    List(
+      "**/*.ts",
+      "**/*.tsx",
+      "package.json",
+      "tsconfig.json",
+      "dashboard/manifest.json",
+    )
+}
+
+// `python`, `shell`, `toml`, and `yaml` are the groups this repository needs.
+// `Hooks.all` supplies the check, fix, pre-commit, and commit-msg hooks and
+// owns their step order. The commit-msg hook runs Timber's Change-Id step.
+hooks = (Hooks.all(List("python", "shell", "toml", "yaml"))) {
+  ["check"] {
+    steps {
+      ["prettier"] = prettier
+      ["tsc"] = Hk.tsc
+    }
+  }
+  ["fix"] {
+    steps {
+      ["prettier"] = prettier
+      ["tsc"] = (Hk.tsc) { depends = List("prettier") }
+    }
+  }
+  ["pre-commit"] {
+    steps {
+      ["prettier"] = prettier
+      ["tsc"] = (Hk.tsc) { depends = List("prettier") }
+    }
+  }
+}
