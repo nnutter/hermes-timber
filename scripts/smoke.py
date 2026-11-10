@@ -51,7 +51,18 @@ plugin.register(None)
 api = load("hermes_timber_api", REPO / "dashboard" / "plugin_api.py")
 
 paths = {route.path for route in api.router.routes}
-assert {"/state", "/sync", "/create", "/remove"} <= paths, sorted(paths)
+assert {
+	"/state",
+	"/sync",
+	"/fetch",
+	"/create",
+	"/pr",
+	"/push",
+	"/merge",
+	"/remove",
+	"/todo",
+	"/sessions",
+} <= paths, sorted(paths)
 
 app = FastAPI()
 app.include_router(api.router, prefix="/plugins/hermes-timber")
