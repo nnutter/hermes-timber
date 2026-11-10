@@ -146,6 +146,7 @@ class PrEntry(BaseModel):
 	mergeBlocker: str | None = None
 	checks: str | None = None
 	repo: str | None = None
+	private: bool | None = None
 	stack: StackInfo | None = None
 
 
@@ -373,6 +374,7 @@ def command_warning(result: subprocess.CompletedProcess[str]) -> str | None:
 
 
 PR_CACHE_TTL = 60.0
+PRIVATE_CACHE_TTL = 300.0
 FETCH_CONCURRENCY = 4
 FAILING_CONCLUSIONS = {"FAILURE", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE"}
 PASSING_CONCLUSIONS = {"SUCCESS", "NEUTRAL", "SKIPPED"}
@@ -422,6 +424,8 @@ _fetch_error: str | None = None
 _fetch_lock = threading.Lock()
 _background_started = False
 _background_lock = threading.Lock()
+_repo_private: dict[str, tuple[float, bool | None]] = {}
+_repo_private_lock = threading.Lock()
 
 
 @dataclass(frozen=True)
@@ -474,6 +478,30 @@ def repo_from_remote_url(url: str) -> str | None:
 def origin_repo(cwd: Path) -> str | None:
 	remote = run(["git", "remote", "get-url", "origin"], cwd)
 	return repo_from_remote_url(remote.stdout) if remote.returncode == 0 else None
+
+
+def repo_private(repo: str | None) -> bool | None:
+	"""Whether a GitHub repository is private, cached per repository."""
+	if repo is None or repo == "":
+		return None
+	now = time.time()
+	with _repo_private_lock:
+		cached = _repo_private.get(repo)
+		if cached is not None and now - cached[0] < PRIVATE_CACHE_TTL:
+			return cached[1]
+	try:
+		result = run(
+			["gh", "repo", "view", repo, "--json", "isPrivate", "--jq", ".isPrivate"],
+			timeout=30,
+		)
+	except HTTPException:
+		value = None
+	else:
+		text = result.stdout.strip().lower()
+		value = True if text == "true" else (False if text == "false" else None)
+	with _repo_private_lock:
+		_repo_private[repo] = (now, value)
+	return value
 
 
 def branch_of(cwd: Path) -> str | None:
@@ -846,6 +874,13 @@ def read_pr_entries() -> None:
 	items = listing()
 	with ThreadPoolExecutor(max_workers=4) as pool:
 		results = list(pool.map(read_push_and_pr, items.worktrees))
+	origins = sorted(
+		{origin for _, _, _, origin, _ in results if origin is not None and origin != ""}
+	)
+	privacy: dict[str, bool | None] = {}
+	if origins:
+		with ThreadPoolExecutor(max_workers=4) as pool:
+			privacy = dict(zip(origins, pool.map(repo_private, origins), strict=True))
 	cache: dict[str, PrEntry] = {}
 	for key, pr, push, origin, stack in results:
 		entry = (
@@ -854,6 +889,7 @@ def read_pr_entries() -> None:
 			else PrEntry(destExists=push.destExists, unpushed=push.unpushed, ff=push.ff)
 		)
 		entry.repo = origin
+		entry.private = privacy.get(origin) if origin is not None else None
 		cache[key] = entry
 	with _pr_lock:
 		_pr_cache = cache
@@ -884,6 +920,7 @@ def refresh_worktree_state(repo: str, name: str) -> WorktreeState | None:
 		else PrEntry(destExists=push.destExists, unpushed=push.unpushed, ff=push.ff)
 	)
 	entry.repo = origin
+	entry.private = repo_private(origin)
 	with _pr_lock:
 		_pr_cache = {**_pr_cache, entry_key: entry}
 		_pr_cache_at = time.time()

@@ -171,6 +171,35 @@ def test_todo_file_edits_one_line(tmp_path: Path) -> None:
 	assert stale.value.status_code == 409
 
 
+def test_repo_private_reads_github_and_caches(monkeypatch: pytest.MonkeyPatch) -> None:
+	answers = {
+		"owner/private-one": "true\n",
+		"owner/private-two": "false\n",
+	}
+	calls: list[list[str]] = []
+
+	def fake_run(
+		argv: list[str], cwd: Path | None = None, timeout: int = api.COMMAND_TIMEOUT
+	) -> subprocess.CompletedProcess[str]:
+		calls.append(argv)
+		return subprocess.CompletedProcess(argv, 0, answers[argv[3]], "")
+
+	monkeypatch.setattr(api, "run", fake_run)
+	assert api.repo_private("owner/private-one") is True
+	assert api.repo_private("owner/private-one") is True
+	assert len(calls) == 1
+	assert api.repo_private("owner/private-two") is False
+	assert api.repo_private(None) is None
+
+
+def test_repo_private_is_unknown_when_github_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+	def fail(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+		raise api.HTTPException(502, "gh unavailable")
+
+	monkeypatch.setattr(api, "run", fail)
+	assert api.repo_private("owner/private-three") is None
+
+
 def test_rebase_aborts_and_restores_on_conflict(monkeypatch: pytest.MonkeyPatch) -> None:
 	calls: list[list[str]] = []
 

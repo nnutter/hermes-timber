@@ -108,7 +108,8 @@ Both surfaces share the same state and refresh loop.
 
 The worktrees toolbar has a split **New worktree** button, a search field, a sort control, a **Repositories** menu, and a refresh button.
 Creating a worktree opens its session.
-A row links its repository and open pull request, and shows its TODO and review counts, ahead/behind counts, and exactly one action button chosen from the row's state:
+A row links its repository and open pull request, and shows its TODO and review counts, ahead/behind counts, and exactly one action button chosen from the row's state.
+A private GitHub repository shows a small lock beside the worktree name.
 
 - **Delete** for a clean worktree that is merged or fully in sync, with no open stack PRs.
 - **Push** when the branch has unpushed commits over `origin/<branch>` and a fast-forward path.

@@ -1371,6 +1371,21 @@ export function WorktreeView({
                         {worktree.repo}
                       </span>
                     )}
+                    {pr?.private === true && (
+                      <span
+                        role="img"
+                        aria-label="Private repository"
+                        title="Private repository"
+                        style={{
+                          display: "inline-flex",
+                          marginLeft: 5,
+                          color: "var(--ui-text-quaternary)",
+                          verticalAlign: "-1px",
+                        }}
+                      >
+                        <Codicon name="lock" size={12} />
+                      </span>
+                    )}
                   </span>
                   {!stack && prUrl && (
                     <a

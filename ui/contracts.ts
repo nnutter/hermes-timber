@@ -50,6 +50,7 @@ export interface PrEntry {
   mergeBlocker?: string | null;
   checks?: string | null;
   repo?: string | null;
+  private?: boolean | null;
   stack?: StackInfo | null;
 }
 
@@ -193,6 +194,7 @@ function isPrEntry(value: unknown): value is PrEntry {
     (value.mergeBlocker == null || typeof value.mergeBlocker === "string") &&
     (value.checks == null || typeof value.checks === "string") &&
     (value.repo == null || typeof value.repo === "string") &&
+    (value.private == null || typeof value.private === "boolean") &&
     (value.stack == null || isStackInfo(value.stack))
   );
 }

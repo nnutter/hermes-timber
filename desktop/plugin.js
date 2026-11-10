@@ -34,7 +34,7 @@ function isStackInfo(value) {
 }
 function isPrEntry(value) {
   if (!record(value)) return false;
-  return (value.number == null || typeof value.number === "number") && (value.url == null || typeof value.url === "string") && (value.title == null || typeof value.title === "string") && typeof value.destExists === "boolean" && typeof value.unpushed === "number" && typeof value.ff === "boolean" && (value.mergeBlocker == null || typeof value.mergeBlocker === "string") && (value.checks == null || typeof value.checks === "string") && (value.repo == null || typeof value.repo === "string") && (value.stack == null || isStackInfo(value.stack));
+  return (value.number == null || typeof value.number === "number") && (value.url == null || typeof value.url === "string") && (value.title == null || typeof value.title === "string") && typeof value.destExists === "boolean" && typeof value.unpushed === "number" && typeof value.ff === "boolean" && (value.mergeBlocker == null || typeof value.mergeBlocker === "string") && (value.checks == null || typeof value.checks === "string") && (value.repo == null || typeof value.repo === "string") && (value.private == null || typeof value.private === "boolean") && (value.stack == null || isStackInfo(value.stack));
 }
 function parsePrs(value) {
   if (!record(value)) return {};
@@ -1988,6 +1988,21 @@ function WorktreeView({
                                       style: muted2,
                                       title: worktree.upstream ? `Upstream: ${worktree.upstream}` : "No upstream",
                                       children: worktree.repo
+                                    }
+                                  ),
+                                  pr?.private === true && /* @__PURE__ */ jsx2(
+                                    "span",
+                                    {
+                                      role: "img",
+                                      "aria-label": "Private repository",
+                                      title: "Private repository",
+                                      style: {
+                                        display: "inline-flex",
+                                        marginLeft: 5,
+                                        color: "var(--ui-text-quaternary)",
+                                        verticalAlign: "-1px"
+                                      },
+                                      children: /* @__PURE__ */ jsx2(Codicon2, { name: "lock", size: 12 })
                                     }
                                   )
                                 ] }),

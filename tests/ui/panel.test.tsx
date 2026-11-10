@@ -223,6 +223,42 @@ describe("Timber worktrees", () => {
     expect(screen.queryByText("never")).not.toBeInTheDocument();
   });
 
+  it("marks a private repository with a lock", async () => {
+    const privateRepo: Worktree = {
+      ...done,
+      name: "private",
+      path: "/trees/app/private",
+    };
+    const privatePr: PrEntry = {
+      number: 3,
+      url: "https://github.com/o/r/pull/3",
+      title: "Private",
+      destExists: true,
+      unpushed: 0,
+      ff: true,
+      mergeBlocker: null,
+      checks: "passed",
+      repo: "o/r",
+      private: true,
+      stack: null,
+    };
+    rest.mockResolvedValue({
+      ...state,
+      worktrees: [privateRepo],
+      prs: { ["app\0private"]: privatePr },
+    });
+    mountPanel();
+    const list = await loaded("private");
+    expect(
+      within(list).getByRole("img", { name: "Private repository" }),
+    ).toBeInTheDocument();
+    expect(
+      within(list)
+        .getByRole("img", { name: "Private repository" })
+        .querySelector('[data-icon="lock"]'),
+    ).toBeInTheDocument();
+  });
+
   it("searches contiguous fields and cycles the sort modes", async () => {
     mountPanel();
     const list = await loaded();
