@@ -752,63 +752,8 @@ function timeAgo(at) {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-// ui/icons.tsx
-import { jsx as jsx2 } from "react/jsx-runtime";
-var MERGE_PATHS = [
-  "M15 13.25a3.25 3.25 0 1 1 6.5 0 3.25 3.25 0 0 1-6.5 0Zm-12.5 6a3.25 3.25 0 1 1 6.5 0 3.25 3.25 0 0 1-6.5 0Zm0-14.5a3.25 3.25 0 1 1 6.5 0 3.25 3.25 0 0 1-6.5 0ZM5.75 6.5a1.75 1.75 0 1 0-.001-3.501A1.75 1.75 0 0 0 5.75 6.5Zm0 14.5a1.75 1.75 0 1 0-.001-3.501A1.75 1.75 0 0 0 5.75 21Zm12.5-6a1.75 1.75 0 1 0-.001-3.501A1.75 1.75 0 0 0 18.25 15Z",
-  "M6.5 7.25c0 2.9 2.35 5.25 5.25 5.25h4.5V14h-4.5A6.75 6.75 0 0 1 5 7.25Z",
-  "M5.75 16.75A.75.75 0 0 1 5 16V8a.75.75 0 0 1 1.5 0v8a.75.75 0 0 1-.75.75Z"
-];
-var PUSH_PATHS = [
-  "M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14Z",
-  "M11.78 4.72a.749.749 0 1 1-1.06 1.06L8.75 3.811V9.5a.75.75 0 0 1-1.5 0V3.811L5.28 5.78a.749.749 0 1 1-1.06-1.06l3.25-3.25a.749.749 0 0 1 1.06 0l3.25 3.25Z"
-];
-var CREATE_PR_PATHS = [
-  "M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354ZM3.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm8.25.75a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Z"
-];
-var NEW_WORKTREE_PATHS = [
-  "M7.122.392a1.75 1.75 0 0 1 1.756 0l5.003 2.902c.83.481.83 1.68 0 2.162L8.878 8.358a1.75 1.75 0 0 1-1.756 0L2.119 5.456a1.25 1.25 0 0 1 0-2.162ZM8.125 1.69a.25.25 0 0 0-.25 0L3.244 4.375 7.875 7.06a.25.25 0 0 0 .25 0l4.63-2.685ZM1.602 7.789a.75.75 0 0 1 1.024-.272l5.249 3.044a.749.749 0 1 1-.753 1.296L1.874 8.813a.75.75 0 0 1-.272-1.024m0 3.5a.75.75 0 0 1 1.024-.272l5.249 3.044a.749.749 0 1 1-.753 1.296l-5.248-3.044a.75.75 0 0 1-.272-1.024M11.75 15.25v-2h-2a.75.75 0 0 1 0-1.5h2v-2a.75.75 0 0 1 1.5 0v2h2a.75.75 0 0 1 0 1.5h-2v2a.75.75 0 0 1-1.5 0"
-];
-var IMPORT_REPO_PATHS = [
-  "M1 2.5A2.5 2.5 0 0 1 3.5 0h8.75a.75.75 0 0 1 .75.75V6a.75.75 0 0 1-1.5 0V1.5h-8a1 1 0 0 0-1 1v6.708A2.486 2.486 0 0 1 3.5 9h3a.75.75 0 0 1 0 1.5h-3a1 1 0 0 0 0 2h3a.75.75 0 0 1 0 1.5h-3A2.5 2.5 0 0 1 1 11.5v-9Z",
-  "M12.21 13.479a.75.75 0 1 0 1.061 1.061l2.504-2.505a.75.75 0 0 0 0-1.061L13.271 8.47a.75.75 0 0 0-1.061 1.06l1.224 1.225H8.75a.75.75 0 1 0 0 1.5h4.685l-1.225 1.224Z"
-];
-function Glyph({
-  paths,
-  size,
-  viewBox = "0 0 16 16"
-}) {
-  return /* @__PURE__ */ jsx2(
-    "svg",
-    {
-      width: size,
-      height: size,
-      viewBox,
-      fill: "currentColor",
-      "aria-hidden": "true",
-      style: { flexShrink: 0 },
-      children: paths.map((path) => /* @__PURE__ */ jsx2("path", { d: path }, path))
-    }
-  );
-}
-function MergeIcon({ size = 18 }) {
-  return /* @__PURE__ */ jsx2(Glyph, { paths: MERGE_PATHS, size, viewBox: "0 0 24 24" });
-}
-function PushIcon({ size = 20 }) {
-  return /* @__PURE__ */ jsx2(Glyph, { paths: PUSH_PATHS, size });
-}
-function CreatePrIcon({ size = 20 }) {
-  return /* @__PURE__ */ jsx2(Glyph, { paths: CREATE_PR_PATHS, size });
-}
-function NewWorktreeIcon({ size = 20 }) {
-  return /* @__PURE__ */ jsx2(Glyph, { paths: NEW_WORKTREE_PATHS, size });
-}
-function ImportRepoIcon({ size = 18 }) {
-  return /* @__PURE__ */ jsx2(Glyph, { paths: IMPORT_REPO_PATHS, size });
-}
-
 // ui/worktrees.tsx
-import { Fragment, jsx as jsx3, jsxs as jsxs2 } from "react/jsx-runtime";
+import { Fragment, jsx as jsx2, jsxs as jsxs2 } from "react/jsx-runtime";
 var TOOLBAR_HEIGHT = 34;
 var REMOVE_COLOR = "var(--ui-purple)";
 var stackStyle2 = {
@@ -945,6 +890,8 @@ function WorktreeView({
   const [blockedAdd, setBlockedAdd] = useState2(false);
   const [running, setRunning] = useState2(() => /* @__PURE__ */ new Set());
   const runningRef = useRef2(/* @__PURE__ */ new Set());
+  const [collecting, setCollecting] = useState2(false);
+  const collected = useRef2(false);
   const [recent, setRecent] = useState2({});
   const consentVersion = useRef2(0);
   const consentTimer = useRef2(null);
@@ -1002,7 +949,7 @@ function WorktreeView({
   const repoBusy = (repo) => ["repo-rename", "repo-remove"].some(
     (verb) => running.has(repoActionId(verb, repo))
   );
-  const disabled = !ready || toolbarBusy;
+  const disabled = !ready || toolbarBusy || collecting;
   const check = () => {
     assertScope(scope);
     if (authenticationRequired || client.getQueryState(queryKey)?.status !== "success") {
@@ -1026,6 +973,25 @@ function WorktreeView({
     if (refreshed.error) throw refreshed.error;
     assertScope(scope);
   };
+  useEffect2(() => {
+    if (!ready || !data || collected.current) return;
+    if (data.fetchedAt !== null && data.prsAt !== null) {
+      collected.current = true;
+      return;
+    }
+    collected.current = true;
+    setCollecting(true);
+    void (async () => {
+      try {
+        await post("/fetch", {});
+        await refresh();
+      } catch (failure) {
+        if (authenticationFailure(failure)) setAuthenticationRequired(true);
+      } finally {
+        setCollecting(false);
+      }
+    })();
+  }, [ready, data, data?.fetchedAt, data?.prsAt]);
   const run = (id, action, kind = null) => {
     if (id !== null && runningRef.current.has(id)) return;
     if (kind === "create" && blockedCreate || kind === "add" && blockedAdd)
@@ -1385,14 +1351,14 @@ function WorktreeView({
       },
       children: [
         /* @__PURE__ */ jsxs2("header", { style: stackStyle2, children: [
-          /* @__PURE__ */ jsx3(
+          /* @__PURE__ */ jsx2(
             "strong",
             {
               style: { fontSize: surface === "page" ? 20 : 17, lineHeight: 1.2 },
               children: "Worktrees"
             }
           ),
-          /* @__PURE__ */ jsx3("span", { style: muted2, children: current ? current.repo.split("/").at(-1) : "Timber" })
+          /* @__PURE__ */ jsx2("span", { style: muted2, children: current ? current.repo.split("/").at(-1) : "Timber" })
         ] }),
         /* @__PURE__ */ jsxs2(
           "div",
@@ -1418,7 +1384,7 @@ function WorktreeView({
                       overflow: "hidden"
                     },
                     children: [
-                      /* @__PURE__ */ jsx3(
+                      /* @__PURE__ */ jsx2(
                         Button2,
                         {
                           type: "button",
@@ -1432,10 +1398,10 @@ function WorktreeView({
                             setCreating((value) => !value);
                           },
                           style: { ...iconButton(TOOLBAR_HEIGHT), ...splitPart },
-                          children: /* @__PURE__ */ jsx3(NewWorktreeIcon, { size: 20 })
+                          children: /* @__PURE__ */ jsx2(Codicon2, { name: "new-folder", size: 18 })
                         }
                       ),
-                      /* @__PURE__ */ jsx3(
+                      /* @__PURE__ */ jsx2(
                         "span",
                         {
                           "aria-hidden": "true",
@@ -1445,7 +1411,7 @@ function WorktreeView({
                           }
                         }
                       ),
-                      /* @__PURE__ */ jsx3(
+                      /* @__PURE__ */ jsx2(
                         Button2,
                         {
                           type: "button",
@@ -1457,8 +1423,12 @@ function WorktreeView({
                           "aria-haspopup": "menu",
                           "aria-expanded": openMenu === "add",
                           onClick: () => setOpenMenu(openMenu === "add" ? null : "add"),
-                          style: { ...splitPart, ...iconButton(28) },
-                          children: /* @__PURE__ */ jsx3(Codicon2, { name: "chevron-down" })
+                          style: {
+                            ...splitPart,
+                            ...iconButton(TOOLBAR_HEIGHT),
+                            width: 28
+                          },
+                          children: /* @__PURE__ */ jsx2(Codicon2, { name: "chevron-down" })
                         }
                       )
                     ]
@@ -1476,12 +1446,12 @@ function WorktreeView({
                         setAdding(true);
                       },
                       children: [
-                        /* @__PURE__ */ jsx3(ImportRepoIcon, { size: 18 }),
-                        /* @__PURE__ */ jsx3("span", { children: "Import repo" })
+                        /* @__PURE__ */ jsx2(Codicon2, { name: "repo-clone", size: 16 }),
+                        /* @__PURE__ */ jsx2("span", { children: "Import repo" })
                       ]
                     }
                   ),
-                  /* @__PURE__ */ jsx3("div", { "aria-hidden": "true", style: menuSeparatorStyle }),
+                  /* @__PURE__ */ jsx2("div", { "aria-hidden": "true", style: menuSeparatorStyle }),
                   /* @__PURE__ */ jsxs2(
                     "button",
                     {
@@ -1493,14 +1463,14 @@ function WorktreeView({
                         setShowRepos(true);
                       },
                       children: [
-                        /* @__PURE__ */ jsx3(Codicon2, { name: "repo" }),
-                        /* @__PURE__ */ jsx3("span", { children: "Repositories" })
+                        /* @__PURE__ */ jsx2(Codicon2, { name: "repo" }),
+                        /* @__PURE__ */ jsx2("span", { children: "Repositories" })
                       ]
                     }
                   )
                 ] })
               ] }),
-              /* @__PURE__ */ jsx3(
+              /* @__PURE__ */ jsx2(
                 Input2,
                 {
                   type: "search",
@@ -1527,7 +1497,7 @@ function WorktreeView({
                       overflow: "hidden"
                     },
                     children: [
-                      /* @__PURE__ */ jsx3(
+                      /* @__PURE__ */ jsx2(
                         Button2,
                         {
                           type: "button",
@@ -1538,11 +1508,15 @@ function WorktreeView({
                           "aria-haspopup": "menu",
                           "aria-expanded": openMenu === "sort",
                           onClick: () => setOpenMenu(openMenu === "sort" ? null : "sort"),
-                          style: { ...splitPart, ...iconButton(28) },
-                          children: /* @__PURE__ */ jsx3(Codicon2, { name: "chevron-down" })
+                          style: {
+                            ...splitPart,
+                            ...iconButton(TOOLBAR_HEIGHT),
+                            width: 28
+                          },
+                          children: /* @__PURE__ */ jsx2(Codicon2, { name: "chevron-down" })
                         }
                       ),
-                      /* @__PURE__ */ jsx3(
+                      /* @__PURE__ */ jsx2(
                         "span",
                         {
                           "aria-hidden": "true",
@@ -1552,7 +1526,7 @@ function WorktreeView({
                           }
                         }
                       ),
-                      /* @__PURE__ */ jsx3(
+                      /* @__PURE__ */ jsx2(
                         Button2,
                         {
                           type: "button",
@@ -1569,7 +1543,7 @@ function WorktreeView({
                             }
                           },
                           style: { ...splitPart, ...iconButton(TOOLBAR_HEIGHT) },
-                          children: /* @__PURE__ */ jsx3(
+                          children: /* @__PURE__ */ jsx2(
                             Codicon2,
                             {
                               name: SORT_MODES.find((mode) => mode.id === sort)?.icon ?? "history"
@@ -1580,7 +1554,7 @@ function WorktreeView({
                     ]
                   }
                 ),
-                openMenu === "sort" && /* @__PURE__ */ jsx3("div", { role: "menu", style: { ...menuStyle, left: "auto", right: 0 }, children: SORT_MODES.map((mode) => /* @__PURE__ */ jsxs2(
+                openMenu === "sort" && /* @__PURE__ */ jsx2("div", { role: "menu", style: { ...menuStyle, left: "auto", right: 0 }, children: SORT_MODES.map((mode) => /* @__PURE__ */ jsxs2(
                   "button",
                   {
                     type: "button",
@@ -1596,8 +1570,8 @@ function WorktreeView({
                       setOpenMenu(null);
                     },
                     children: [
-                      /* @__PURE__ */ jsx3(Codicon2, { name: mode.icon }),
-                      /* @__PURE__ */ jsx3("span", { children: mode.label })
+                      /* @__PURE__ */ jsx2(Codicon2, { name: mode.icon }),
+                      /* @__PURE__ */ jsx2("span", { children: mode.label })
                     ]
                   },
                   mode.id
@@ -1618,9 +1592,10 @@ function WorktreeView({
               gap: 10
             },
             children: [
-              !online && /* @__PURE__ */ jsx3("p", { role: "status", children: "Gateway offline. Cached results are stale. Actions are disabled." }),
-              listing.isPending && online && /* @__PURE__ */ jsx3("p", { role: "status", children: "Loading worktrees\u2026" }),
-              authenticationRequired && /* @__PURE__ */ jsx3("p", { role: "alert", children: "Gateway sign-in or permission is required. Automatic requests are paused. Sign in through Hermes Connections, then select Refresh. Cached results are stale and actions are disabled." }),
+              !online && /* @__PURE__ */ jsx2("p", { role: "status", children: "Gateway offline. Cached results are stale. Actions are disabled." }),
+              listing.isPending && online && /* @__PURE__ */ jsx2("p", { role: "status", children: "Loading worktrees\u2026" }),
+              collecting && /* @__PURE__ */ jsx2("p", { role: "status", children: "Collecting worktree and pull request state\u2026" }),
+              authenticationRequired && /* @__PURE__ */ jsx2("p", { role: "alert", children: "Gateway sign-in or permission is required. Automatic requests are paused. Sign in through Hermes Connections, then select Refresh. Cached results are stale and actions are disabled." }),
               listing.isError && !authenticationRequired && /* @__PURE__ */ jsxs2("p", { role: "alert", children: [
                 data ? "Cached results are stale. " : "Cannot load Timber. ",
                 message(listing.error),
@@ -1630,8 +1605,8 @@ function WorktreeView({
                 error,
                 (blockedAdd || blockedCreate) && " The operation may have partially completed. Review the listing, then use Refresh before retrying."
               ] }),
-              notice.length > 0 && /* @__PURE__ */ jsx3("div", { role: "status", children: notice.map((text, index) => /* @__PURE__ */ jsx3("p", { style: index ? muted2 : void 0, children: text }, index)) }),
-              data?.warnings.length ? /* @__PURE__ */ jsx3("div", { "aria-label": "Backend warnings", children: data.warnings.map((text, index) => /* @__PURE__ */ jsx3("p", { style: muted2, children: text }, index)) }) : null,
+              notice.length > 0 && /* @__PURE__ */ jsx2("div", { role: "status", children: notice.map((text, index) => /* @__PURE__ */ jsx2("p", { style: index ? muted2 : void 0, children: text }, index)) }),
+              data?.warnings.length ? /* @__PURE__ */ jsx2("div", { "aria-label": "Backend warnings", children: data.warnings.map((text, index) => /* @__PURE__ */ jsx2("p", { style: muted2, children: text }, index)) }) : null,
               adding && /* @__PURE__ */ jsxs2(
                 "form",
                 {
@@ -1640,8 +1615,8 @@ function WorktreeView({
                   style: boxed,
                   children: [
                     /* @__PURE__ */ jsxs2("label", { style: stackStyle2, children: [
-                      /* @__PURE__ */ jsx3("span", { style: muted2, children: "Repository URL or path" }),
-                      /* @__PURE__ */ jsx3(
+                      /* @__PURE__ */ jsx2("span", { style: muted2, children: "Repository URL or path" }),
+                      /* @__PURE__ */ jsx2(
                         Input2,
                         {
                           value: source,
@@ -1652,8 +1627,8 @@ function WorktreeView({
                       )
                     ] }),
                     /* @__PURE__ */ jsxs2("label", { style: stackStyle2, children: [
-                      /* @__PURE__ */ jsx3("span", { style: muted2, children: "Repository name (optional)" }),
-                      /* @__PURE__ */ jsx3(
+                      /* @__PURE__ */ jsx2("span", { style: muted2, children: "Repository name (optional)" }),
+                      /* @__PURE__ */ jsx2(
                         Input2,
                         {
                           value: repoName,
@@ -1663,8 +1638,8 @@ function WorktreeView({
                       )
                     ] }),
                     /* @__PURE__ */ jsxs2("label", { style: stackStyle2, children: [
-                      /* @__PURE__ */ jsx3("span", { style: muted2, children: "Alias (optional)" }),
-                      /* @__PURE__ */ jsx3(
+                      /* @__PURE__ */ jsx2("span", { style: muted2, children: "Alias (optional)" }),
+                      /* @__PURE__ */ jsx2(
                         Input2,
                         {
                           value: alias,
@@ -1674,7 +1649,7 @@ function WorktreeView({
                       )
                     ] }),
                     /* @__PURE__ */ jsxs2("div", { style: rowStyle, children: [
-                      /* @__PURE__ */ jsx3(
+                      /* @__PURE__ */ jsx2(
                         Button2,
                         {
                           type: "submit",
@@ -1683,7 +1658,7 @@ function WorktreeView({
                           children: running.has("add") ? "Adding\u2026" : "Add repo"
                         }
                       ),
-                      /* @__PURE__ */ jsx3(
+                      /* @__PURE__ */ jsx2(
                         Button2,
                         {
                           type: "button",
@@ -1700,8 +1675,8 @@ function WorktreeView({
               ),
               creating && /* @__PURE__ */ jsxs2("form", { "aria-label": "Create worktree", onSubmit: create, style: boxed, children: [
                 /* @__PURE__ */ jsxs2("label", { style: stackStyle2, children: [
-                  /* @__PURE__ */ jsx3("span", { style: muted2, children: "Repository" }),
-                  /* @__PURE__ */ jsx3(
+                  /* @__PURE__ */ jsx2("span", { style: muted2, children: "Repository" }),
+                  /* @__PURE__ */ jsx2(
                     "select",
                     {
                       "aria-label": "Create repository",
@@ -1709,13 +1684,13 @@ function WorktreeView({
                       value: createRepo || data?.repositories[0] || "",
                       disabled,
                       onChange: (event) => setCreateRepo(event.target.value),
-                      children: data?.repositories.map((item) => /* @__PURE__ */ jsx3("option", { value: item, children: item }, item))
+                      children: data?.repositories.map((item) => /* @__PURE__ */ jsx2("option", { value: item, children: item }, item))
                     }
                   )
                 ] }),
                 /* @__PURE__ */ jsxs2("label", { style: stackStyle2, children: [
-                  /* @__PURE__ */ jsx3("span", { style: muted2, children: "Branch name (optional \u2014 Timber chooses when empty)" }),
-                  /* @__PURE__ */ jsx3(
+                  /* @__PURE__ */ jsx2("span", { style: muted2, children: "Branch name (optional \u2014 Timber chooses when empty)" }),
+                  /* @__PURE__ */ jsx2(
                     Input2,
                     {
                       value: name,
@@ -1726,8 +1701,8 @@ function WorktreeView({
                   )
                 ] }),
                 /* @__PURE__ */ jsxs2("label", { style: stackStyle2, children: [
-                  /* @__PURE__ */ jsx3("span", { style: muted2, children: "Upstream (optional)" }),
-                  /* @__PURE__ */ jsx3(
+                  /* @__PURE__ */ jsx2("span", { style: muted2, children: "Upstream (optional)" }),
+                  /* @__PURE__ */ jsx2(
                     Input2,
                     {
                       value: upstream,
@@ -1738,7 +1713,7 @@ function WorktreeView({
                   )
                 ] }),
                 /* @__PURE__ */ jsxs2("div", { style: rowStyle, children: [
-                  /* @__PURE__ */ jsx3(
+                  /* @__PURE__ */ jsx2(
                     Button2,
                     {
                       type: "submit",
@@ -1747,7 +1722,7 @@ function WorktreeView({
                       children: running.has("create") ? "Creating\u2026" : "Create worktree"
                     }
                   ),
-                  /* @__PURE__ */ jsx3(
+                  /* @__PURE__ */ jsx2(
                     Button2,
                     {
                       type: "button",
@@ -1762,8 +1737,8 @@ function WorktreeView({
               ] }),
               showRepos && /* @__PURE__ */ jsxs2("div", { role: "group", "aria-label": "Repositories", style: boxed, children: [
                 /* @__PURE__ */ jsxs2("div", { style: rowStyle, children: [
-                  /* @__PURE__ */ jsx3("strong", { children: "Repositories" }),
-                  /* @__PURE__ */ jsx3(
+                  /* @__PURE__ */ jsx2("strong", { children: "Repositories" }),
+                  /* @__PURE__ */ jsx2(
                     Button2,
                     {
                       type: "button",
@@ -1779,7 +1754,7 @@ function WorktreeView({
                     }
                   )
                 ] }),
-                data && data.repositories.length === 0 && /* @__PURE__ */ jsx3("p", { style: muted2, children: "No repositories yet. Import one to start." }),
+                data && data.repositories.length === 0 && /* @__PURE__ */ jsx2("p", { style: muted2, children: "No repositories yet. Import one to start." }),
                 (data?.repositories ?? []).map((repo) => {
                   const count = worktrees.filter(
                     (worktree) => worktree.repo === repo
@@ -1805,13 +1780,13 @@ function WorktreeView({
                               gap: 8
                             },
                             children: [
-                              /* @__PURE__ */ jsx3("span", { style: { minWidth: 0, overflowWrap: "anywhere" }, children: repo }),
-                              /* @__PURE__ */ jsx3("span", { style: { ...muted2, marginLeft: "auto" }, children: count === 0 ? "No worktrees" : `${count} worktree${count === 1 ? "" : "s"}` })
+                              /* @__PURE__ */ jsx2("span", { style: { minWidth: 0, overflowWrap: "anywhere" }, children: repo }),
+                              /* @__PURE__ */ jsx2("span", { style: { ...muted2, marginLeft: "auto" }, children: count === 0 ? "No worktrees" : `${count} worktree${count === 1 ? "" : "s"}` })
                             ]
                           }
                         ),
                         /* @__PURE__ */ jsxs2("div", { style: rowStyle, children: [
-                          /* @__PURE__ */ jsx3(
+                          /* @__PURE__ */ jsx2(
                             Button2,
                             {
                               type: "button",
@@ -1828,7 +1803,7 @@ function WorktreeView({
                               children: "Rename"
                             }
                           ),
-                          count === 0 && /* @__PURE__ */ jsx3(
+                          count === 0 && /* @__PURE__ */ jsx2(
                             Button2,
                             {
                               type: "button",
@@ -1839,7 +1814,7 @@ function WorktreeView({
                               "aria-label": `Remove repository ${repo}`,
                               style: { color: REMOVE_COLOR },
                               onClick: () => removeRepository(repo),
-                              children: running.has(repoActionId("repo-remove", repo)) ? /* @__PURE__ */ jsx3(Codicon2, { name: "loading", spinning: true }) : /* @__PURE__ */ jsx3(Codicon2, { name: "trash" })
+                              children: running.has(repoActionId("repo-remove", repo)) ? /* @__PURE__ */ jsx2(Codicon2, { name: "loading", spinning: true }) : /* @__PURE__ */ jsx2(Codicon2, { name: "trash" })
                             }
                           )
                         ] }),
@@ -1852,7 +1827,7 @@ function WorktreeView({
                               if (!toolbarBusy && !busy) renameRepository(repo);
                             },
                             children: [
-                              /* @__PURE__ */ jsx3(
+                              /* @__PURE__ */ jsx2(
                                 Input2,
                                 {
                                   value: renameTo,
@@ -1862,7 +1837,7 @@ function WorktreeView({
                                 }
                               ),
                               /* @__PURE__ */ jsxs2("div", { style: rowStyle, children: [
-                                /* @__PURE__ */ jsx3(
+                                /* @__PURE__ */ jsx2(
                                   Button2,
                                   {
                                     type: "submit",
@@ -1871,7 +1846,7 @@ function WorktreeView({
                                     children: running.has(repoActionId("repo-rename", repo)) ? "Renaming\u2026" : "Rename"
                                   }
                                 ),
-                                /* @__PURE__ */ jsx3(
+                                /* @__PURE__ */ jsx2(
                                   Button2,
                                   {
                                     type: "button",
@@ -1892,8 +1867,8 @@ function WorktreeView({
                   );
                 })
               ] }),
-              data && filtered.length === 0 && /* @__PURE__ */ jsx3("p", { children: worktrees.length ? "No matching worktrees." : "No worktrees yet. Create one above." }),
-              /* @__PURE__ */ jsx3(
+              data && filtered.length === 0 && /* @__PURE__ */ jsx2("p", { children: worktrees.length ? "No matching worktrees." : "No worktrees yet. Create one above." }),
+              /* @__PURE__ */ jsx2(
                 "ul",
                 {
                   "aria-label": "Worktrees",
@@ -1927,7 +1902,7 @@ function WorktreeView({
                           padding: "10px 10px 10px 12px"
                         },
                         children: [
-                          currentRow && /* @__PURE__ */ jsx3(
+                          currentRow && /* @__PURE__ */ jsx2(
                             "span",
                             {
                               "aria-hidden": "true",
@@ -1953,9 +1928,9 @@ function WorktreeView({
                               },
                               children: [
                                 /* @__PURE__ */ jsxs2("span", { style: { minWidth: 0, overflowWrap: "anywhere" }, children: [
-                                  /* @__PURE__ */ jsx3("strong", { title: worktree.path, children: worktree.name }),
-                                  /* @__PURE__ */ jsx3("span", { style: muted2, children: " @ " }),
-                                  repoUrl ? /* @__PURE__ */ jsx3(
+                                  /* @__PURE__ */ jsx2("strong", { title: worktree.path, children: worktree.name }),
+                                  /* @__PURE__ */ jsx2("span", { style: muted2, children: " @ " }),
+                                  repoUrl ? /* @__PURE__ */ jsx2(
                                     "a",
                                     {
                                       href: repoUrl,
@@ -1967,7 +1942,7 @@ function WorktreeView({
                                       },
                                       children: worktree.repo
                                     }
-                                  ) : /* @__PURE__ */ jsx3(
+                                  ) : /* @__PURE__ */ jsx2(
                                     "span",
                                     {
                                       style: muted2,
@@ -2015,7 +1990,7 @@ function WorktreeView({
                               ]
                             }
                           ),
-                          stack && /* @__PURE__ */ jsx3(
+                          stack && /* @__PURE__ */ jsx2(
                             StackLines,
                             {
                               stack,
@@ -2027,7 +2002,7 @@ function WorktreeView({
                             }
                           ),
                           /* @__PURE__ */ jsxs2("div", { style: { display: "flex", alignItems: "center" }, children: [
-                            /* @__PURE__ */ jsx3(
+                            /* @__PURE__ */ jsx2(
                               Button2,
                               {
                                 type: "button",
@@ -2038,10 +2013,10 @@ function WorktreeView({
                                 "aria-label": `Open session in ${worktree.name}@${worktree.repo}`,
                                 onClick: () => run(rowActionId("open", worktree), () => open(worktree)),
                                 style: iconButton(TOOLBAR_HEIGHT),
-                                children: running.has(rowActionId("open", worktree)) ? /* @__PURE__ */ jsx3(Codicon2, { name: "loading", spinning: true }) : /* @__PURE__ */ jsx3(Codicon2, { name: "comment-discussion" })
+                                children: running.has(rowActionId("open", worktree)) ? /* @__PURE__ */ jsx2(Codicon2, { name: "loading", spinning: true }) : /* @__PURE__ */ jsx2(Codicon2, { name: "comment-discussion", size: 17 })
                               }
                             ),
-                            /* @__PURE__ */ jsx3(
+                            /* @__PURE__ */ jsx2(
                               "span",
                               {
                                 style: {
@@ -2055,7 +2030,7 @@ function WorktreeView({
                                 "aria-label": worktree.todoTotal !== void 0 ? `TODO ${worktree.todoDone ?? 0} of ${worktree.todoTotal} done` : void 0,
                                 title: worktree.todoTotal !== void 0 ? `TODO ${worktree.todoDone ?? 0} of ${worktree.todoTotal} done` : "No TODOs",
                                 children: worktree.todoTotal !== void 0 && /* @__PURE__ */ jsxs2(Fragment, { children: [
-                                  /* @__PURE__ */ jsx3(Codicon2, { name: "check-all" }),
+                                  /* @__PURE__ */ jsx2(Codicon2, { name: "check-all" }),
                                   worktree.todoDone ?? 0,
                                   "/",
                                   worktree.todoTotal
@@ -2077,7 +2052,7 @@ function WorktreeView({
                                   flex: "none"
                                 },
                                 children: [
-                                  /* @__PURE__ */ jsx3(Codicon2, { name: "eye" }),
+                                  /* @__PURE__ */ jsx2(Codicon2, { name: "eye" }),
                                   worktree.review ? `${worktree.review.approved}/${worktree.review.total}` : "?"
                                 ]
                               }
@@ -2127,7 +2102,7 @@ function WorktreeView({
                                       ]
                                     }
                                   ),
-                                  /* @__PURE__ */ jsx3(
+                                  /* @__PURE__ */ jsx2(
                                     RowActionButton,
                                     {
                                       action,
@@ -2170,10 +2145,10 @@ function WorktreeView({
                                   "@",
                                   worktree.repo
                                 ] }),
-                                /* @__PURE__ */ jsx3("span", { style: muted2, children: "Leave both fields empty to use the commits ahead of the upstream. A draft session continues if you cancel." }),
+                                /* @__PURE__ */ jsx2("span", { style: muted2, children: "Leave both fields empty to use the commits ahead of the upstream. A draft session continues if you cancel." }),
                                 /* @__PURE__ */ jsxs2("label", { style: stackStyle2, children: [
-                                  /* @__PURE__ */ jsx3("span", { style: muted2, children: "Subject" }),
-                                  /* @__PURE__ */ jsx3(
+                                  /* @__PURE__ */ jsx2("span", { style: muted2, children: "Subject" }),
+                                  /* @__PURE__ */ jsx2(
                                     Input2,
                                     {
                                       value: prTitle,
@@ -2183,8 +2158,8 @@ function WorktreeView({
                                   )
                                 ] }),
                                 /* @__PURE__ */ jsxs2("label", { style: stackStyle2, children: [
-                                  /* @__PURE__ */ jsx3("span", { style: muted2, children: "Body" }),
-                                  /* @__PURE__ */ jsx3(
+                                  /* @__PURE__ */ jsx2("span", { style: muted2, children: "Body" }),
+                                  /* @__PURE__ */ jsx2(
                                     "textarea",
                                     {
                                       value: prBody,
@@ -2200,7 +2175,7 @@ function WorktreeView({
                                   )
                                 ] }),
                                 /* @__PURE__ */ jsxs2("div", { style: rowStyle, children: [
-                                  /* @__PURE__ */ jsx3(
+                                  /* @__PURE__ */ jsx2(
                                     Button2,
                                     {
                                       type: "submit",
@@ -2209,7 +2184,7 @@ function WorktreeView({
                                       children: running.has(rowActionId("pr", worktree)) ? "Creating\u2026" : "Create PR"
                                     }
                                   ),
-                                  /* @__PURE__ */ jsx3(
+                                  /* @__PURE__ */ jsx2(
                                     Button2,
                                     {
                                       type: "button",
@@ -2224,7 +2199,7 @@ function WorktreeView({
                               ]
                             }
                           ),
-                          (worktree.statusError || merged && !canRemove(worktree, pr)) && /* @__PURE__ */ jsx3("p", { style: muted2, role: "status", children: worktree.statusError ? "Git status could not be read. Removal is disabled." : "Merged, but has uncommitted changes or an open stack PR. Finish them to remove." })
+                          (worktree.statusError || merged && !canRemove(worktree, pr)) && /* @__PURE__ */ jsx2("p", { style: muted2, role: "status", children: worktree.statusError ? "Git status could not be read. Removal is disabled." : "Merged, but has uncommitted changes or an open stack PR. Finish them to remove." })
                         ]
                       },
                       `${worktree.repo}/${worktree.name}`
@@ -2248,17 +2223,17 @@ function WorktreeView({
             children: [
               /* @__PURE__ */ jsxs2("span", { style: { ...muted2, marginRight: "auto" }, "aria-live": "polite", children: [
                 data ? `${filtered.length} of ${worktrees.length} worktrees` : "",
-                toolbarBusy ? " \xB7 Working\u2026" : ""
+                collecting ? " \xB7 Collecting\u2026" : toolbarBusy ? " \xB7 Working\u2026" : ""
               ] }),
-              data ? /* @__PURE__ */ jsx3(
+              data ? /* @__PURE__ */ jsx2(
                 "span",
                 {
                   style: { ...muted2, minWidth: 64, textAlign: "right" },
                   title: data.fetchError ? data.fetchError : "Worktrees and remotes refreshed",
                   children: timeAgo(data.fetchedAt)
                 }
-              ) : /* @__PURE__ */ jsx3("span", { style: { ...muted2, minWidth: 64, textAlign: "right" }, children: "Stale" }),
-              /* @__PURE__ */ jsx3(
+              ) : /* @__PURE__ */ jsx2("span", { style: { ...muted2, minWidth: 64, textAlign: "right" }, children: "Stale" }),
+              /* @__PURE__ */ jsx2(
                 Button2,
                 {
                   type: "button",
@@ -2280,7 +2255,7 @@ function WorktreeView({
                     setBlockedAdd(false);
                   }),
                   style: iconButton(TOOLBAR_HEIGHT),
-                  children: running.has("refresh") ? /* @__PURE__ */ jsx3(Codicon2, { name: "loading", spinning: true }) : /* @__PURE__ */ jsx3(Codicon2, { name: "refresh" })
+                  children: running.has("refresh") ? /* @__PURE__ */ jsx2(Codicon2, { name: "loading", spinning: true }) : /* @__PURE__ */ jsx2(Codicon2, { name: "refresh" })
                 }
               )
             ]
@@ -2307,7 +2282,7 @@ function RowActionButton({
   const armed = preview?.worktree.path === worktree.path;
   const idFor = (verb2) => rowActionId(verb2, worktree);
   if (action === null)
-    return /* @__PURE__ */ jsx3(
+    return /* @__PURE__ */ jsx2(
       "span",
       {
         "aria-hidden": "true",
@@ -2317,7 +2292,7 @@ function RowActionButton({
   const title = action === "delete" ? armed ? `Click again within 5s to delete ${preview?.worktree.name}@${preview?.worktree.repo}, branch ${preview?.branch}, and its directory.` : `Remove ${worktree.name}@${worktree.repo}` : action === "push" ? `Push ${pr?.unpushed ?? 0} commit${pr?.unpushed === 1 ? "" : "s"} to origin/${worktree.name}` : action === "merge" ? `Merge PR #${pr?.number}` : action === "open-pr" ? pr?.mergeBlocker ? `Cannot merge yet (${pr.mergeBlocker}); open PR #${pr.number}` : `Open PR #${pr?.number}` : action === "create-pr" ? `Open or create a PR for ${worktree.name}@${worktree.repo}` : `origin/${worktree.name} has commits this worktree lacks. Pull or rebase before opening or updating a PR.`;
   const onClick = action === "delete" ? onDelete : action === "push" ? onPush : action === "merge" ? onMerge : action === "open-pr" ? onOpenPr : action === "create-pr" ? onCreatePr : void 0;
   const verb = action === "delete" ? "remove" : action === "push" ? "push" : action === "merge" ? "merge" : action === "create-pr" ? "pr" : null;
-  return /* @__PURE__ */ jsx3(
+  return /* @__PURE__ */ jsx2(
     Button2,
     {
       type: "button",
@@ -2328,7 +2303,7 @@ function RowActionButton({
       "aria-label": title,
       style: { ...iconButton(TOOLBAR_HEIGHT), color },
       onClick,
-      children: verb !== null && running.has(idFor(verb)) ? /* @__PURE__ */ jsx3(Codicon2, { name: "loading", spinning: true }) : action === "delete" ? /* @__PURE__ */ jsx3(Codicon2, { name: "trash" }) : action === "push" ? /* @__PURE__ */ jsx3(PushIcon, {}) : action === "merge" || action === "open-pr" ? /* @__PURE__ */ jsx3(MergeIcon, {}) : action === "create-pr" ? /* @__PURE__ */ jsx3(CreatePrIcon, {}) : /* @__PURE__ */ jsx3(Codicon2, { name: "warning" })
+      children: verb !== null && running.has(idFor(verb)) ? /* @__PURE__ */ jsx2(Codicon2, { name: "loading", spinning: true }) : action === "delete" ? /* @__PURE__ */ jsx2(Codicon2, { name: "trash", size: 15 }) : action === "push" ? /* @__PURE__ */ jsx2(Codicon2, { name: "cloud-upload", size: 16 }) : action === "merge" ? /* @__PURE__ */ jsx2(Codicon2, { name: "git-merge", size: 16 }) : action === "open-pr" ? /* @__PURE__ */ jsx2(Codicon2, { name: "git-pull-request", size: 16 }) : action === "create-pr" ? /* @__PURE__ */ jsx2(Codicon2, { name: "git-pull-request-create", size: 16 }) : /* @__PURE__ */ jsx2(Codicon2, { name: "warning", size: 16 })
     }
   );
 }
@@ -2356,7 +2331,7 @@ function StackLines({
       },
       children: [
         /* @__PURE__ */ jsxs2("div", { style: { display: "flex", alignItems: "baseline", gap: 6 }, children: [
-          /* @__PURE__ */ jsx3(Codicon2, { name: "layers", style: { color: "var(--ui-accent)" } }),
+          /* @__PURE__ */ jsx2(Codicon2, { name: "layers", style: { color: "var(--ui-accent)" } }),
           /* @__PURE__ */ jsxs2(
             "a",
             {
@@ -2382,7 +2357,7 @@ function StackLines({
             stack.size,
             " PRs"
           ] }),
-          /* @__PURE__ */ jsx3("span", { style: faint, children: allMerged ? "all merged" : "top PR merges all" })
+          /* @__PURE__ */ jsx2("span", { style: faint, children: allMerged ? "all merged" : "top PR merges all" })
         ] }),
         stack.prs.map((entry) => {
           const color = entry.state === "MERGED" ? "var(--ui-purple)" : entry.blocker ? "var(--ui-red)" : entry.checks === "pending" ? "var(--ui-yellow)" : "var(--ui-green)";
@@ -2396,7 +2371,7 @@ function StackLines({
                 paddingLeft: entry.current ? 0 : 8
               },
               children: [
-                /* @__PURE__ */ jsx3(
+                /* @__PURE__ */ jsx2(
                   "span",
                   {
                     style: {
@@ -2423,8 +2398,8 @@ function StackLines({
                     ]
                   }
                 ),
-                /* @__PURE__ */ jsx3("span", { style: { ...faint, marginLeft: "auto", flex: "none" }, children: entry.state === "MERGED" ? "merged" : entry.state === "CLOSED" ? "closed" : entry.blocker ?? "ready" }),
-                entry.state === "OPEN" && /* @__PURE__ */ jsx3(
+                /* @__PURE__ */ jsx2("span", { style: { ...faint, marginLeft: "auto", flex: "none" }, children: entry.state === "MERGED" ? "merged" : entry.state === "CLOSED" ? "closed" : entry.blocker ?? "ready" }),
+                entry.state === "OPEN" && /* @__PURE__ */ jsx2(
                   Button2,
                   {
                     type: "button",
@@ -2435,7 +2410,7 @@ function StackLines({
                     "aria-label": `Merge stack PR #${entry.number}`,
                     style: { ...iconButton(24), color },
                     onClick: () => onMerge(entry),
-                    children: /* @__PURE__ */ jsx3(MergeIcon, { size: 16 })
+                    children: /* @__PURE__ */ jsx2(Codicon2, { name: "git-merge", size: 15 })
                   }
                 )
               ]
@@ -2481,10 +2456,10 @@ var menuSeparatorStyle = {
 };
 
 // ui/page.tsx
-import { jsx as jsx4 } from "react/jsx-runtime";
+import { jsx as jsx3 } from "react/jsx-runtime";
 function TimberPage({ context }) {
   const scope = useScope();
-  return /* @__PURE__ */ jsx4(
+  return /* @__PURE__ */ jsx3(
     WorktreeView,
     {
       context,
@@ -2498,7 +2473,7 @@ function TimberPage({ context }) {
 }
 function TimberTodosPage({ context }) {
   const scope = useScope();
-  return /* @__PURE__ */ jsx4(
+  return /* @__PURE__ */ jsx3(
     TodoView,
     {
       context,
@@ -2512,10 +2487,10 @@ function TimberTodosPage({ context }) {
 }
 
 // ui/panel.tsx
-import { jsx as jsx5 } from "react/jsx-runtime";
+import { jsx as jsx4 } from "react/jsx-runtime";
 function TimberPanel({ context }) {
   const scope = useScope();
-  return /* @__PURE__ */ jsx5(
+  return /* @__PURE__ */ jsx4(
     WorktreeView,
     {
       context,
@@ -2529,7 +2504,7 @@ function TimberPanel({ context }) {
 }
 function TimberTodosPanel({ context }) {
   const scope = useScope();
-  return /* @__PURE__ */ jsx5(
+  return /* @__PURE__ */ jsx4(
     TodoView,
     {
       context,
@@ -2543,7 +2518,7 @@ function TimberTodosPanel({ context }) {
 }
 
 // ui/plugin.tsx
-import { jsx as jsx6 } from "react/jsx-runtime";
+import { jsx as jsx5 } from "react/jsx-runtime";
 var plugin = {
   id: "hermes-timber",
   name: "Timber",
@@ -2618,14 +2593,14 @@ var plugin = {
         area: ROUTES_AREA,
         title: "Timber",
         data: { path: "/timber" },
-        render: () => /* @__PURE__ */ jsx6(TimberPage, { context })
+        render: () => /* @__PURE__ */ jsx5(TimberPage, { context })
       },
       {
         id: "todos-page",
         area: ROUTES_AREA,
         title: "Timber TODOs",
         data: { path: "/timber-todos" },
-        render: () => /* @__PURE__ */ jsx6(TimberTodosPage, { context })
+        render: () => /* @__PURE__ */ jsx5(TimberTodosPage, { context })
       },
       {
         id: "nav",
@@ -2656,7 +2631,7 @@ var plugin = {
           width: "440px",
           collapsible: true
         },
-        render: () => /* @__PURE__ */ jsx6(TimberPanel, { context })
+        render: () => /* @__PURE__ */ jsx5(TimberPanel, { context })
       },
       {
         id: "todos-panel",
@@ -2667,7 +2642,7 @@ var plugin = {
           width: "400px",
           collapsible: true
         },
-        render: () => /* @__PURE__ */ jsx6(TimberTodosPanel, { context })
+        render: () => /* @__PURE__ */ jsx5(TimberTodosPanel, { context })
       },
       { id: shortcut.id, area: KEYBINDS_AREA, data: shortcut },
       { id: showWorktrees.id, area: PALETTE_AREA, data: showWorktrees },

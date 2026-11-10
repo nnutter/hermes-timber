@@ -82,11 +82,11 @@ const state: TimberState = {
   projects: { app: "project-app", lib: "project-lib" },
   worktrees: [dirty, done, broken],
   warnings: [],
-  at: 0,
-  fetchedAt: null,
+  at: Date.now(),
+  fetchedAt: Date.now(),
   fetchError: null,
   prs: {},
-  prsAt: 1,
+  prsAt: Date.now(),
 };
 const rest = vi.fn<PluginContext["rest"]>();
 const register = vi.fn<PluginContext["register"]>(() => () => {});
@@ -193,6 +193,34 @@ describe("Timber worktrees", () => {
         name: "Open or create a PR for working@app",
       }),
     ).toBeInTheDocument();
+  });
+
+  it("collects worktree and PR state when the panel opens cold", async () => {
+    let collected = false;
+    rest.mockImplementation(async (path) => {
+      if (path === "/fetch") {
+        collected = true;
+        return { fetchedAt: Date.now(), errors: [] };
+      }
+      return collected
+        ? { ...state, fetchedAt: Date.now(), prsAt: Date.now() }
+        : { ...state, fetchedAt: null, prsAt: null };
+    });
+    mountPanel();
+    await loaded();
+    await waitFor(() =>
+      expect(rest).toHaveBeenCalledWith("/fetch", {
+        method: "POST",
+        body: {},
+      }),
+    );
+    const list = screen.getByRole("list", { name: "Worktrees" });
+    expect(
+      await within(list).findByRole("button", {
+        name: "Open or create a PR for working@app",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("never")).not.toBeInTheDocument();
   });
 
   it("searches contiguous fields and cycles the sort modes", async () => {

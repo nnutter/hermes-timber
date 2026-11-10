@@ -41,13 +41,6 @@ import type {
   Worktree,
   WorktreeState,
 } from "./contracts";
-import {
-  CreatePrIcon,
-  ImportRepoIcon,
-  MergeIcon,
-  NewWorktreeIcon,
-  PushIcon,
-} from "./icons";
 import { authenticationFailure, pollDelay } from "./polling";
 import { assertScope } from "./scope";
 
@@ -203,6 +196,8 @@ export function WorktreeView({
   const [blockedAdd, setBlockedAdd] = useState(false);
   const [running, setRunning] = useState<Set<string>>(() => new Set());
   const runningRef = useRef<Set<string>>(new Set());
+  const [collecting, setCollecting] = useState(false);
+  const collected = useRef(false);
   const [recent, setRecent] = useState<Record<string, number>>({});
   const consentVersion = useRef(0);
   const consentTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -268,7 +263,7 @@ export function WorktreeView({
     ["repo-rename", "repo-remove"].some((verb) =>
       running.has(repoActionId(verb, repo)),
     );
-  const disabled = !ready || toolbarBusy;
+  const disabled = !ready || toolbarBusy || collecting;
 
   const check = () => {
     assertScope(scope);
@@ -296,6 +291,25 @@ export function WorktreeView({
     if (refreshed.error) throw refreshed.error;
     assertScope(scope);
   };
+  useEffect(() => {
+    if (!ready || !data || collected.current) return;
+    if (data.fetchedAt !== null && data.prsAt !== null) {
+      collected.current = true;
+      return;
+    }
+    collected.current = true;
+    setCollecting(true);
+    void (async () => {
+      try {
+        await post("/fetch", {});
+        await refresh();
+      } catch (failure) {
+        if (authenticationFailure(failure)) setAuthenticationRequired(true);
+      } finally {
+        setCollecting(false);
+      }
+    })();
+  }, [ready, data, data?.fetchedAt, data?.prsAt]);
   const run = (
     id: string | null,
     action: () => Promise<void>,
@@ -772,7 +786,7 @@ export function WorktreeView({
               }}
               style={{ ...iconButton(TOOLBAR_HEIGHT), ...splitPart }}
             >
-              <NewWorktreeIcon size={20} />
+              <Codicon name="new-folder" size={18} />
             </Button>
             <span
               aria-hidden="true"
@@ -791,7 +805,11 @@ export function WorktreeView({
               aria-haspopup="menu"
               aria-expanded={openMenu === "add"}
               onClick={() => setOpenMenu(openMenu === "add" ? null : "add")}
-              style={{ ...splitPart, ...iconButton(28) }}
+              style={{
+                ...splitPart,
+                ...iconButton(TOOLBAR_HEIGHT),
+                width: 28,
+              }}
             >
               <Codicon name="chevron-down" />
             </Button>
@@ -807,7 +825,7 @@ export function WorktreeView({
                   setAdding(true);
                 }}
               >
-                <ImportRepoIcon size={18} />
+                <Codicon name="repo-clone" size={16} />
                 <span>Import repo</span>
               </button>
               <div aria-hidden="true" style={menuSeparatorStyle} />
@@ -857,7 +875,11 @@ export function WorktreeView({
               aria-haspopup="menu"
               aria-expanded={openMenu === "sort"}
               onClick={() => setOpenMenu(openMenu === "sort" ? null : "sort")}
-              style={{ ...splitPart, ...iconButton(28) }}
+              style={{
+                ...splitPart,
+                ...iconButton(TOOLBAR_HEIGHT),
+                width: 28,
+              }}
             >
               <Codicon name="chevron-down" />
             </Button>
@@ -936,6 +958,9 @@ export function WorktreeView({
           </p>
         )}
         {listing.isPending && online && <p role="status">Loading worktrees…</p>}
+        {collecting && (
+          <p role="status">Collecting worktree and pull request state…</p>
+        )}
         {authenticationRequired && (
           <p role="alert">
             Gateway sign-in or permission is required. Automatic requests are
@@ -1360,7 +1385,7 @@ export function WorktreeView({
                     {running.has(rowActionId("open", worktree)) ? (
                       <Codicon name="loading" spinning />
                     ) : (
-                      <Codicon name="comment-discussion" />
+                      <Codicon name="comment-discussion" size={17} />
                     )}
                   </Button>
                   <span
@@ -1561,7 +1586,7 @@ export function WorktreeView({
       >
         <span style={{ ...muted, marginRight: "auto" }} aria-live="polite">
           {data ? `${filtered.length} of ${worktrees.length} worktrees` : ""}
-          {toolbarBusy ? " · Working…" : ""}
+          {collecting ? " · Collecting…" : toolbarBusy ? " · Working…" : ""}
         </span>
         {data ? (
           <span
@@ -1704,15 +1729,17 @@ function RowActionButton({
       {verb !== null && running.has(idFor(verb)) ? (
         <Codicon name="loading" spinning />
       ) : action === "delete" ? (
-        <Codicon name="trash" />
+        <Codicon name="trash" size={15} />
       ) : action === "push" ? (
-        <PushIcon />
-      ) : action === "merge" || action === "open-pr" ? (
-        <MergeIcon />
+        <Codicon name="cloud-upload" size={16} />
+      ) : action === "merge" ? (
+        <Codicon name="git-merge" size={16} />
+      ) : action === "open-pr" ? (
+        <Codicon name="git-pull-request" size={16} />
       ) : action === "create-pr" ? (
-        <CreatePrIcon />
+        <Codicon name="git-pull-request-create" size={16} />
       ) : (
-        <Codicon name="warning" />
+        <Codicon name="warning" size={16} />
       )}
     </Button>
   );
@@ -1830,7 +1857,7 @@ function StackLines({
                 style={{ ...iconButton(24), color }}
                 onClick={() => onMerge(entry)}
               >
-                <MergeIcon size={16} />
+                <Codicon name="git-merge" size={15} />
               </Button>
             )}
           </div>
