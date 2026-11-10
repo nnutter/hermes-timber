@@ -256,7 +256,7 @@ export function WorktreeView({
     running.has(id),
   );
   const rowBusy = (worktree: Worktree) =>
-    ["open", "pr", "push", "merge", "remove"].some((verb) =>
+    ["open", "pr", "push", "rebase", "merge", "remove"].some((verb) =>
       running.has(rowActionId(verb, worktree)),
     );
   const repoBusy = (repo: string) =>
@@ -655,6 +655,25 @@ export function WorktreeView({
       if (!applyState(result.state)) await refresh();
       setNotice([
         `Pushed ${worktree.name}@${worktree.repo} to origin/${worktree.name}.`,
+      ]);
+    });
+  }
+
+  function rebase(worktree: Worktree) {
+    run(rowActionId("rebase", worktree), async () => {
+      const result = await post("/rebase", {
+        repo: worktree.repo,
+        name: worktree.name,
+      });
+      if (
+        !record(result) ||
+        result.rebased !== true ||
+        typeof result.upstream !== "string"
+      )
+        throw new Error("The backend did not confirm the rebase.");
+      if (!applyState(result.state)) await refresh();
+      setNotice([
+        `Rebased ${worktree.name}@${worktree.repo} onto ${result.upstream}.`,
       ]);
     });
   }
@@ -1264,6 +1283,13 @@ export function WorktreeView({
             const currentRow = Boolean(cwd) && worktree.path === cwd;
             const action = actionFor(worktree, pr, prsLoaded);
             const color = actionColor(action, worktree, pr?.checks);
+            const behind = worktree.behind ?? 0;
+            const canRebase =
+              worktree.clean && !worktree.statusError && behind > 0;
+            const rebaseHint =
+              !worktree.clean || worktree.statusError
+                ? "Rebase requires a clean worktree; commit or stash changes first"
+                : `Rebase ${behind} commit${behind === 1 ? "" : "s"} onto ${worktree.upstream ?? "upstream"}; conflicts are aborted`;
             return (
               <li
                 key={`${worktree.repo}/${worktree.name}`}
@@ -1466,12 +1492,31 @@ export function WorktreeView({
                         </span>
                       )}
                       {(worktree.behind ?? 0) > 0 && (
-                        <span
-                          style={{ marginLeft: 6 }}
-                          title={`${worktree.behind} commit${worktree.behind === 1 ? "" : "s"} behind`}
+                        <Button
+                          type="button"
+                          size="xs"
+                          variant="ghost"
+                          disabled={disabled || rowBusy(worktree) || !canRebase}
+                          title={rebaseHint}
+                          aria-label={`Rebase ${behind} commit${behind === 1 ? "" : "s"} from upstream for ${worktree.name}@${worktree.repo}`}
+                          onClick={() => rebase(worktree)}
+                          style={{
+                            ...rowItem,
+                            minWidth: 0,
+                            minHeight: 0,
+                            height: 28,
+                            padding: "0 2px",
+                            fontSize: 13,
+                            whiteSpace: "nowrap",
+                            color: "var(--ui-text-secondary)",
+                          }}
                         >
-                          ↓{worktree.behind}
-                        </span>
+                          {running.has(rowActionId("rebase", worktree)) ? (
+                            <Codicon name="loading" spinning size={12} />
+                          ) : (
+                            `↓${behind}`
+                          )}
+                        </Button>
                       )}
                     </span>
                     <RowActionButton

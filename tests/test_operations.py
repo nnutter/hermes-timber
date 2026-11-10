@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import subprocess
 import sys
 from pathlib import Path
 
@@ -168,6 +169,79 @@ def test_todo_file_edits_one_line(tmp_path: Path) -> None:
 	with pytest.raises(HTTPException) as stale:
 		api.toggle_todo_line(path, 3, "Wrong", True)
 	assert stale.value.status_code == 409
+
+
+def test_rebase_aborts_and_restores_on_conflict(monkeypatch: pytest.MonkeyPatch) -> None:
+	calls: list[list[str]] = []
+
+	def fake_run(
+		argv: list[str], cwd: Path | None = None, timeout: int = api.COMMAND_TIMEOUT
+	) -> subprocess.CompletedProcess[str]:
+		calls.append(argv)
+		if argv == ["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]:
+			return subprocess.CompletedProcess(argv, 0, "origin/main\n", "")
+		if argv[:3] == ["git", "rev-parse", "--git-path"]:
+			return subprocess.CompletedProcess(argv, 0, f"/missing/{argv[3]}", "")
+		if argv == ["git", "rebase", "@{u}"]:
+			return subprocess.CompletedProcess(
+				argv,
+				1,
+				"CONFLICT (content): Merge conflict in src/x.py\n",
+				"error: could not apply abc",
+			)
+		if argv == ["git", "rebase", "--abort"]:
+			return subprocess.CompletedProcess(argv, 0, "", "")
+		raise AssertionError(f"Unexpected command: {argv}")
+
+	monkeypatch.setattr(api, "run", fake_run)
+	worktree = api.Worktree(
+		name="feature",
+		repo="example/demo",
+		path="/tmp/worktree",
+		clean=True,
+		merged=False,
+		statusError=False,
+		commit="abc",
+		ahead=1,
+		behind=1,
+	)
+	with pytest.raises(HTTPException) as failure:
+		api.rebase_worktree(worktree)
+	assert failure.value.status_code == 409
+	assert "Rebase aborted" in str(failure.value.detail)
+	assert ["git", "rebase", "--abort"] in calls
+
+
+def test_rebase_reports_the_upstream(monkeypatch: pytest.MonkeyPatch) -> None:
+	def fake_run(
+		argv: list[str], cwd: Path | None = None, timeout: int = api.COMMAND_TIMEOUT
+	) -> subprocess.CompletedProcess[str]:
+		if argv == ["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]:
+			return subprocess.CompletedProcess(argv, 0, "origin/main\n", "")
+		if argv[:3] == ["git", "rev-parse", "--git-path"]:
+			return subprocess.CompletedProcess(argv, 0, f"/missing/{argv[3]}", "")
+		if argv == ["git", "rebase", "@{u}"]:
+			return subprocess.CompletedProcess(argv, 0, "Successfully rebased\n", "")
+		raise AssertionError(f"Unexpected command: {argv}")
+
+	monkeypatch.setattr(api, "run", fake_run)
+	monkeypatch.setattr(api, "refresh_worktree_state", lambda repo, name: None)
+	result = api.rebase_worktree(
+		api.Worktree(
+			name="feature",
+			repo="example/demo",
+			path="/tmp/worktree",
+			clean=True,
+			merged=False,
+			statusError=False,
+			commit="abc",
+			ahead=1,
+			behind=1,
+		)
+	)
+	assert result.rebased is True
+	assert result.upstream == "origin/main"
+	assert result.state is None
 
 
 def test_session_list_and_archive_read_the_profile_store(

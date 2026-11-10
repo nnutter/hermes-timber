@@ -121,6 +121,8 @@ A worktree whose PR belongs to a GitHub stack lists the stack under the row.
 Each open PR in the stack has its own merge button; merging a lower PR merges the stack up to it, and the top PR merges the whole stack.
 Merging runs `gh pr merge` with the head commit pinned, or `gh stack merge` for a stack.
 Pushing runs `git push origin HEAD:<branch>` without changing the upstream or forcing.
+Clicking a row's ↓ count rebases the worktree onto its upstream (`git rebase @{u}`).
+It is available only for a clean worktree; a conflict aborts the rebase and reports the conflict, leaving the worktree unchanged.
 Refresh runs `timber git @repo -- fetch` for every repository with worktrees; the gateway also fetches every five minutes.
 
 The **Timber TODOs** page shows one worktree's `TODO.md`, or the repository's shared `TODO.repo.md`.
@@ -167,7 +169,7 @@ It returns `{"repository": "registered name", "warnings": []}` only after a clea
 On failure or an uncertain outcome it returns an error; refresh and inspect Timber before retrying.
 No repository is removed automatically.
 
-The remaining routes are `GET /state`, `POST /fetch`, `/create`, `/repo-rename`, `/repo-remove`, `/pr`, `/push`, `/merge`, `/remove/preview`, `/remove`, `/todo`, `/todo-add`, `/todo-toggle`, `/todo-remove`, `GET /sessions`, and `POST /sessions/archive`.
+The remaining routes are `GET /state`, `POST /fetch`, `/create`, `/repo-rename`, `/repo-remove`, `/pr`, `/push`, `/rebase`, `/merge`, `/remove/preview`, `/remove`, `/todo`, `/todo-add`, `/todo-toggle`, `/todo-remove`, `GET /sessions`, and `POST /sessions/archive`.
 The UI parses every response defensively; the backend re-reads the listing before a mutation and refuses diagnostics rather than acting on an uncertain listing.
 
 ## Explore the code

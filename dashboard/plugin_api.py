@@ -205,6 +205,12 @@ class Merged(BaseModel):
 	whole: bool = False
 
 
+class Rebased(BaseModel):
+	rebased: bool
+	upstream: str
+	state: WorktreeState | None
+
+
 class TodoItem(BaseModel):
 	id: int
 	title: str
@@ -728,6 +734,59 @@ def push_branch(worktree: Worktree) -> bool:
 			502, pushed.stderr.strip() or f"git push failed (exit {pushed.returncode})"
 		)
 	return True
+
+
+def rebase_worktree(worktree: Worktree) -> Rebased:
+	if worktree.statusError:
+		raise HTTPException(409, "Git status unknown; refresh and inspect first")
+	if not worktree.clean:
+		raise HTTPException(409, "Rebase requires a clean worktree; commit or stash changes first")
+	if (worktree.behind or 0) == 0:
+		raise HTTPException(409, f"Nothing to rebase for {worktree.name}@{worktree.repo}")
+	cwd = Path(worktree.path)
+	upstream = run(["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], cwd)
+	upstream_name = upstream.stdout.strip()
+	if upstream.returncode != 0 or not upstream_name:
+		raise HTTPException(
+			422,
+			f"No upstream for {worktree.name}@{worktree.repo}; set one before rebasing",
+		)
+	for name in ("rebase-merge", "rebase-apply"):
+		git_path = run(["git", "rev-parse", "--git-path", name], cwd)
+		if git_path.returncode != 0:
+			continue
+		path = Path(git_path.stdout.strip())
+		if not path.is_absolute():
+			path = cwd / path
+		if path.exists():
+			raise HTTPException(409, "A rebase is already in progress in this worktree")
+	try:
+		result = run(["git", "rebase", "@{u}"], cwd, timeout=180)
+	except HTTPException as exc:
+		run(["git", "rebase", "--abort"], cwd)
+		raise HTTPException(
+			409, f"Rebase aborted; the worktree was restored. {exc.detail}"
+		) from exc
+	if result.returncode != 0:
+		abort = run(["git", "rebase", "--abort"], cwd)
+		output = "\n".join(
+			line.strip()
+			for line in f"{result.stderr}\n{result.stdout}".splitlines()
+			if line.strip()
+		)
+		restored = (
+			"the worktree was restored"
+			if abort.returncode == 0
+			else "the abort also failed; inspect the worktree"
+		)
+		raise HTTPException(409, f"Rebase aborted; {restored}. {output[:800]}".strip())
+	with _pr_lock:
+		_pr_cache_stale = True
+	try:
+		state = refresh_worktree_state(worktree.repo, worktree.name)
+	except (HTTPException, OSError, sqlite3.Error):
+		state = None
+	return Rebased(rebased=True, upstream=upstream_name, state=state)
 
 
 def pr_entry(pr: PrView, push: PushInfo, stack: StackInfo | None) -> PrEntry:
@@ -1866,6 +1925,22 @@ def push(body: Target) -> Pushed:
 		raise HTTPException(409, f"Nothing to push for {body.name}@{body.repo}")
 	state = refresh_worktree_state(body.repo, body.name)
 	return Pushed(pushed=True, state=state)
+
+
+@router.post("/rebase")
+def rebase(body: Target) -> Rebased:
+	items = listing()
+	found = next(
+		(
+			worktree
+			for worktree in items.worktrees
+			if worktree.repo == body.repo and worktree.name == body.name
+		),
+		None,
+	)
+	if found is None:
+		raise HTTPException(404, f"Worktree not found: {body.name}@{body.repo}")
+	return rebase_worktree(found)
 
 
 @router.post("/merge")

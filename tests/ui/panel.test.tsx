@@ -281,6 +281,40 @@ describe("Timber worktrees", () => {
     expect(screen.getByRole("button", { name: "More actions" })).toBeDisabled();
   });
 
+  it("rebases a worktree from its down count", async () => {
+    const behind: Worktree = {
+      name: "behind",
+      repo: "app",
+      path: "/trees/app/behind",
+      clean: true,
+      merged: false,
+      statusError: false,
+      ahead: 1,
+      behind: 2,
+      commit: "b",
+      upstream: "origin/main",
+    };
+    rest.mockImplementation(async (path) => {
+      if (path === "/rebase")
+        return { rebased: true, upstream: "origin/main", state: null };
+      return { ...state, worktrees: [behind], prs: {} };
+    });
+    mountPanel();
+    const list = await loaded("behind");
+    await userEvent.click(
+      within(list).getByRole("button", {
+        name: "Rebase 2 commits from upstream for behind@app",
+      }),
+    );
+    await waitFor(() =>
+      expect(rest).toHaveBeenCalledWith("/rebase", {
+        method: "POST",
+        body: { repo: "app", name: "behind" },
+      }),
+    );
+    await screen.findByText("Rebased behind@app onto origin/main.");
+  });
+
   it("creates a worktree and opens its session", async () => {
     let created = false;
     rest.mockImplementation(async (path) => {

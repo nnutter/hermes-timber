@@ -943,7 +943,7 @@ function WorktreeView({
   const toolbarBusy = ["create", "add", "refresh"].some(
     (id) => running.has(id)
   );
-  const rowBusy = (worktree) => ["open", "pr", "push", "merge", "remove"].some(
+  const rowBusy = (worktree) => ["open", "pr", "push", "rebase", "merge", "remove"].some(
     (verb) => running.has(rowActionId(verb, worktree))
   );
   const repoBusy = (repo) => ["repo-rename", "repo-remove"].some(
@@ -1277,6 +1277,20 @@ function WorktreeView({
       if (!applyState(result.state)) await refresh();
       setNotice([
         `Pushed ${worktree.name}@${worktree.repo} to origin/${worktree.name}.`
+      ]);
+    });
+  }
+  function rebase(worktree) {
+    run(rowActionId("rebase", worktree), async () => {
+      const result = await post("/rebase", {
+        repo: worktree.repo,
+        name: worktree.name
+      });
+      if (!record(result) || result.rebased !== true || typeof result.upstream !== "string")
+        throw new Error("The backend did not confirm the rebase.");
+      if (!applyState(result.state)) await refresh();
+      setNotice([
+        `Rebased ${worktree.name}@${worktree.repo} onto ${result.upstream}.`
       ]);
     });
   }
@@ -1888,6 +1902,9 @@ function WorktreeView({
                     const currentRow = Boolean(cwd) && worktree.path === cwd;
                     const action = actionFor(worktree, pr, prsLoaded);
                     const color = actionColor(action, worktree, pr?.checks);
+                    const behind = worktree.behind ?? 0;
+                    const canRebase = worktree.clean && !worktree.statusError && behind > 0;
+                    const rebaseHint = !worktree.clean || worktree.statusError ? "Rebase requires a clean worktree; commit or stash changes first" : `Rebase ${behind} commit${behind === 1 ? "" : "s"} onto ${worktree.upstream ?? "upstream"}; conflicts are aborted`;
                     return /* @__PURE__ */ jsxs2(
                       "li",
                       {
@@ -2088,15 +2105,27 @@ function WorktreeView({
                                             ]
                                           }
                                         ),
-                                        (worktree.behind ?? 0) > 0 && /* @__PURE__ */ jsxs2(
-                                          "span",
+                                        (worktree.behind ?? 0) > 0 && /* @__PURE__ */ jsx2(
+                                          Button2,
                                           {
-                                            style: { marginLeft: 6 },
-                                            title: `${worktree.behind} commit${worktree.behind === 1 ? "" : "s"} behind`,
-                                            children: [
-                                              "\u2193",
-                                              worktree.behind
-                                            ]
+                                            type: "button",
+                                            size: "xs",
+                                            variant: "ghost",
+                                            disabled: disabled || rowBusy(worktree) || !canRebase,
+                                            title: rebaseHint,
+                                            "aria-label": `Rebase ${behind} commit${behind === 1 ? "" : "s"} from upstream for ${worktree.name}@${worktree.repo}`,
+                                            onClick: () => rebase(worktree),
+                                            style: {
+                                              ...rowItem,
+                                              minWidth: 0,
+                                              minHeight: 0,
+                                              height: 28,
+                                              padding: "0 2px",
+                                              fontSize: 13,
+                                              whiteSpace: "nowrap",
+                                              color: "var(--ui-text-secondary)"
+                                            },
+                                            children: running.has(rowActionId("rebase", worktree)) ? /* @__PURE__ */ jsx2(Codicon2, { name: "loading", spinning: true, size: 12 }) : `\u2193${behind}`
                                           }
                                         )
                                       ]

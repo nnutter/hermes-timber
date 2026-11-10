@@ -58,6 +58,7 @@ assert {
 	"/create",
 	"/pr",
 	"/push",
+	"/rebase",
 	"/merge",
 	"/remove",
 	"/todo",
