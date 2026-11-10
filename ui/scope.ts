@@ -11,7 +11,11 @@ export function scopeKey(): string {
 }
 
 function snapshot(): string {
-  return JSON.stringify([scopeKey(), host.state.gateway.get()]);
+  return JSON.stringify([
+    scopeKey(),
+    host.state.gateway.get(),
+    host.state.cwd.get(),
+  ]);
 }
 
 function subscribe(changed: () => void): () => void {
@@ -19,14 +23,17 @@ function subscribe(changed: () => void): () => void {
     host.state.profile.listen(changed),
     host.state.connectionId.listen(changed),
     host.state.gateway.listen(changed),
+    host.state.cwd.listen(changed),
     host.onEvent("*", changed),
   ];
   return () => disposers.forEach((dispose) => dispose());
 }
 
-export function useScope(): { key: string; online: boolean } {
-  useSyncExternalStore(subscribe, snapshot, snapshot);
-  return { key: scopeKey(), online: host.state.gateway.get() === "open" };
+export function useScope(): { key: string; online: boolean; cwd: string } {
+  const value = JSON.parse(
+    useSyncExternalStore(subscribe, snapshot, snapshot),
+  ) as [string, string, string];
+  return { key: value[0], online: value[1] === "open", cwd: value[2] };
 }
 
 export function assertScope(key: string): void {

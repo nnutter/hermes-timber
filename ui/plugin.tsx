@@ -3,49 +3,32 @@ import {
   KEYBINDS_AREA,
   PALETTE_AREA,
   queryClient,
+  ROUTES_AREA,
+  SIDEBAR_NAV_AREA,
 } from "@hermes/plugin-sdk";
 import type {
   HermesPlugin,
   KeybindContribution,
   PaletteContribution,
+  RouteContribution,
+  SidebarNavContribution,
 } from "@hermes/plugin-sdk";
-import { TimberPanel } from "./panel";
 import { message, responseWarnings } from "./contracts";
+import { TimberPage, TimberTodosPage } from "./page";
+import { TimberPanel, TimberTodosPanel } from "./panel";
 import { assertScope, scopeKey } from "./scope";
 
 const plugin: HermesPlugin = {
   id: "hermes-timber",
   name: "Timber",
   description:
-    "Create, open, and safely remove Timber worktrees in repository Projects.",
+    "Manage Timber worktrees, repositories, TODOs, and pull requests in Hermes.",
   register(context) {
     let syncing = false;
-    context.register({
-      id: "panel",
-      area: "panes",
-      title: "Timber",
-      data: { placement: "right", width: "400px" },
-      render: () => <TimberPanel context={context} />,
-    });
-    const shortcut: KeybindContribution = {
-      id: "hermes-timber.show",
-      label: "Show Timber worktrees",
-      category: "view",
-      defaults: [],
-      run: () => host.revealPane("hermes-timber:panel"),
-    };
-    context.register({ id: "shortcut", area: KEYBINDS_AREA, data: shortcut });
-    const command: PaletteContribution = {
-      id: "show-timber",
-      label: "Show Timber worktrees",
-      keywords: ["worktree", "repository", "project", "branch"],
-      run: () => host.revealPane("hermes-timber:panel"),
-    };
-    context.register({ id: command.id, area: PALETTE_AREA, data: command });
     const sync: PaletteContribution = {
       id: "sync-projects",
       label: "Timber: Sync Projects",
-      keywords: ["timber", "worktree", "repository"],
+      keywords: ["timber", "worktree", "repository", "project"],
       run: () => {
         if (syncing) return;
         const scope = scopeKey();
@@ -87,7 +70,87 @@ const plugin: HermesPlugin = {
         })();
       },
     };
-    context.register({ id: sync.id, area: PALETTE_AREA, data: sync });
+    const showWorktrees: PaletteContribution = {
+      id: "show-timber",
+      label: "Timber: Show worktrees",
+      keywords: ["worktree", "repository", "branch", "project"],
+      run: () => host.navigate("/timber"),
+    };
+    const showTodos: PaletteContribution = {
+      id: "show-timber-todos",
+      label: "Timber: Show TODOs",
+      keywords: ["todo", "task", "checklist", "timber"],
+      run: () => host.navigate("/timber-todos"),
+    };
+    const shortcut: KeybindContribution = {
+      id: "hermes-timber.show",
+      label: "Show Timber worktrees",
+      category: "view",
+      defaults: [],
+      run: () => host.revealPane("hermes-timber:panel"),
+    };
+    context.registerMany([
+      {
+        id: "page",
+        area: ROUTES_AREA,
+        title: "Timber",
+        data: { path: "/timber" } satisfies RouteContribution,
+        render: () => <TimberPage context={context} />,
+      },
+      {
+        id: "todos-page",
+        area: ROUTES_AREA,
+        title: "Timber TODOs",
+        data: { path: "/timber-todos" } satisfies RouteContribution,
+        render: () => <TimberTodosPage context={context} />,
+      },
+      {
+        id: "nav",
+        area: SIDEBAR_NAV_AREA,
+        order: 60,
+        data: {
+          codicon: "git-branch",
+          label: "Timber",
+          path: "/timber",
+        } satisfies SidebarNavContribution,
+      },
+      {
+        id: "todos-nav",
+        area: SIDEBAR_NAV_AREA,
+        order: 61,
+        data: {
+          codicon: "checklist",
+          label: "Timber TODOs",
+          path: "/timber-todos",
+        } satisfies SidebarNavContribution,
+      },
+      {
+        id: "panel",
+        area: "panes",
+        title: "Worktrees",
+        data: {
+          placement: "right",
+          width: "440px",
+          collapsible: true,
+        },
+        render: () => <TimberPanel context={context} />,
+      },
+      {
+        id: "todos-panel",
+        area: "panes",
+        title: "TODOs",
+        data: {
+          placement: "right",
+          width: "400px",
+          collapsible: true,
+        },
+        render: () => <TimberTodosPanel context={context} />,
+      },
+      { id: shortcut.id, area: KEYBINDS_AREA, data: shortcut },
+      { id: showWorktrees.id, area: PALETTE_AREA, data: showWorktrees },
+      { id: showTodos.id, area: PALETTE_AREA, data: showTodos },
+      { id: sync.id, area: PALETTE_AREA, data: sync },
+    ]);
   },
 };
 

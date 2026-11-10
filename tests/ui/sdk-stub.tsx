@@ -13,6 +13,9 @@ export const host = {
     connectionId: atom<string | null>("local"),
     profile: atom("default"),
     gateway: atom("open"),
+    cwd: atom(""),
+    focusedStoredSessionId: atom<string | null>(null),
+    viewport: atom({ width: 1440, height: 900, narrow: false }),
   },
   onEvent: (_type: string, listener: () => void) => {
     listeners.add(listener);
@@ -29,9 +32,14 @@ export const host = {
       (session: string, options?: Record<string, unknown>) => Promise<void>
     >(),
   revealPane: vi.fn<(id: string) => void>(),
+  navigate: vi.fn<(path: string) => void>(),
   notify: vi.fn<(input: { kind: string; message: string }) => string>(
     () => "notice",
   ),
+};
+export const os = {
+  openExternal: vi.fn<(url: string) => Promise<boolean>>(async () => true),
+  revealPath: vi.fn<(path: string) => Promise<boolean>>(async () => true),
 };
 export function switchScope(connection: string, profile = "default") {
   epoch++;
@@ -44,13 +52,21 @@ export function resetHost() {
   host.state.connectionId.set("local");
   host.state.profile.set("default");
   host.state.gateway.set("open");
+  host.state.cwd.set("");
   host.request.mockReset();
   host.openSession.mockReset();
+  host.revealPane.mockReset();
+  host.navigate.mockReset();
   host.notify.mockClear();
+  os.openExternal.mockReset();
+  os.openExternal.mockImplementation(async () => true);
+  os.revealPath.mockReset();
   queryClient.clear();
 }
 export const PALETTE_AREA = "palette";
 export const KEYBINDS_AREA = "keybinds";
+export const ROUTES_AREA = "routes";
+export const SIDEBAR_NAV_AREA = "sidebar.nav";
 export function Button({
   variant: _variant,
   size: _size,
@@ -76,7 +92,8 @@ export function Badge({
 
 export function Codicon({
   name,
+  spinning: _spinning,
   ...props
-}: ComponentProps<"i"> & { name: string }) {
+}: ComponentProps<"i"> & { name: string; spinning?: boolean }) {
   return <i aria-hidden="true" data-icon={name} {...props} />;
 }

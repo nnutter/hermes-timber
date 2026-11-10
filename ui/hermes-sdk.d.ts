@@ -20,7 +20,12 @@ declare module "@hermes/plugin-sdk" {
   }
   export interface PluginContext {
     register: (contribution: PluginContribution) => () => void;
+    registerMany: (contributions: PluginContribution[]) => () => void;
     rest: <T>(path: string, options?: PluginRestOptions) => Promise<T>;
+    os: {
+      openExternal: (url: string) => Promise<boolean>;
+      revealPath: (path: string) => Promise<boolean>;
+    };
   }
   export interface HermesPlugin {
     id: string;
@@ -34,8 +39,18 @@ declare module "@hermes/plugin-sdk" {
     keywords?: string[];
     run: () => void;
   }
+  export interface RouteContribution {
+    path: string;
+  }
+  export interface SidebarNavContribution {
+    codicon: string;
+    label: string;
+    path: string;
+  }
   export const PALETTE_AREA: "palette";
   export const KEYBINDS_AREA: "keybinds";
+  export const ROUTES_AREA: "routes";
+  export const SIDEBAR_NAV_AREA: "sidebar.nav";
   export interface KeybindContribution {
     id: string;
     label: string;
@@ -49,9 +64,17 @@ declare module "@hermes/plugin-sdk" {
       connectionId: ReadableAtom<string | null>;
       profile: ReadableAtom<string>;
       gateway: ReadableAtom<string>;
+      cwd: ReadableAtom<string>;
+      focusedStoredSessionId: ReadableAtom<string | null>;
+      viewport: ReadableAtom<{
+        width: number;
+        height: number;
+        narrow: boolean;
+      }>;
     };
     onEvent: (type: string, listener: () => void) => () => void;
     revealPane: (paneId: string) => void;
+    navigate: (path: string) => void;
     notify: (input: {
       kind: "success" | "warning" | "error";
       message: string;

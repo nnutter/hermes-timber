@@ -20,6 +20,39 @@ export interface Worktree {
   review?: ReviewProgress | null;
 }
 
+export interface StackPr {
+  number: number;
+  url: string;
+  title: string;
+  branch: string;
+  position: number;
+  state: string;
+  current: boolean;
+  checks: string;
+  blocker: string | null;
+}
+
+export interface StackInfo {
+  number: number;
+  url: string;
+  size: number;
+  base: string;
+  prs: StackPr[];
+}
+
+export interface PrEntry {
+  number?: number | null;
+  url?: string | null;
+  title?: string | null;
+  destExists: boolean;
+  unpushed: number;
+  ff: boolean;
+  mergeBlocker?: string | null;
+  checks?: string | null;
+  repo?: string | null;
+  stack?: StackInfo | null;
+}
+
 export interface TimberState {
   host: string;
   hermes_home: string;
@@ -27,6 +60,11 @@ export interface TimberState {
   worktrees: Worktree[];
   projects: Record<string, string>;
   warnings: string[];
+  at: number;
+  fetchedAt: number | null;
+  fetchError: string | null;
+  prs: Record<string, PrEntry>;
+  prsAt: number | null;
 }
 
 export interface RemovePreview {
@@ -34,6 +72,40 @@ export interface RemovePreview {
   worktree: Worktree;
   branch: string;
   warning: string;
+}
+
+export interface WorktreeState {
+  worktree: Worktree;
+  pr: PrEntry;
+}
+
+export interface PrCreated {
+  url: string;
+  number: number;
+  created: boolean;
+}
+
+export interface TodoItem {
+  id: number;
+  title: string;
+  complete: boolean;
+  depth: number;
+}
+
+export interface TodoList {
+  scope: "worktree" | "repo";
+  summary: { incomplete: number; complete: number };
+  todos: TodoItem[];
+}
+
+export interface SessionEntry {
+  id: string;
+  title: string;
+  updated: number | null;
+}
+
+export interface SessionList {
+  sessions: SessionEntry[];
 }
 
 export function record(value: unknown): value is Record<string, unknown> {
@@ -82,6 +154,58 @@ export function isWorktree(value: unknown): value is Worktree {
   );
 }
 
+function isStackPr(value: unknown): value is StackPr {
+  return (
+    record(value) &&
+    typeof value.number === "number" &&
+    typeof value.url === "string" &&
+    typeof value.title === "string" &&
+    typeof value.branch === "string" &&
+    typeof value.position === "number" &&
+    typeof value.state === "string" &&
+    typeof value.current === "boolean" &&
+    typeof value.checks === "string" &&
+    (value.blocker === null || typeof value.blocker === "string")
+  );
+}
+
+function isStackInfo(value: unknown): value is StackInfo {
+  return (
+    record(value) &&
+    typeof value.number === "number" &&
+    typeof value.url === "string" &&
+    typeof value.size === "number" &&
+    typeof value.base === "string" &&
+    Array.isArray(value.prs) &&
+    value.prs.every(isStackPr)
+  );
+}
+
+function isPrEntry(value: unknown): value is PrEntry {
+  if (!record(value)) return false;
+  return (
+    (value.number == null || typeof value.number === "number") &&
+    (value.url == null || typeof value.url === "string") &&
+    (value.title == null || typeof value.title === "string") &&
+    typeof value.destExists === "boolean" &&
+    typeof value.unpushed === "number" &&
+    typeof value.ff === "boolean" &&
+    (value.mergeBlocker == null || typeof value.mergeBlocker === "string") &&
+    (value.checks == null || typeof value.checks === "string") &&
+    (value.repo == null || typeof value.repo === "string") &&
+    (value.stack == null || isStackInfo(value.stack))
+  );
+}
+
+function parsePrs(value: unknown): Record<string, PrEntry> {
+  if (!record(value)) return {};
+  const prs: Record<string, PrEntry> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (isPrEntry(entry)) prs[key] = entry;
+  }
+  return prs;
+}
+
 export function parseState(value: unknown): TimberState {
   if (
     !record(value) ||
@@ -107,6 +231,11 @@ export function parseState(value: unknown): TimberState {
     worktrees: value.worktrees.filter(isWorktree),
     projects,
     warnings: value.warnings,
+    at: typeof value.at === "number" ? value.at : 0,
+    fetchedAt: typeof value.fetchedAt === "number" ? value.fetchedAt : null,
+    fetchError: typeof value.fetchError === "string" ? value.fetchError : null,
+    prs: parsePrs(value.prs),
+    prsAt: typeof value.prsAt === "number" ? value.prsAt : null,
   };
 }
 
@@ -130,7 +259,8 @@ export function parsePreview(value: unknown): RemovePreview {
 }
 
 export function safeToRemove(worktree: Worktree): boolean {
-  return worktree.clean && worktree.merged && !worktree.statusError;
+  const synced = (worktree.ahead ?? 0) === 0 && (worktree.behind ?? 0) === 0;
+  return worktree.clean && !worktree.statusError && (worktree.merged || synced);
 }
 
 export function responseWarnings(value: unknown): string[] {
@@ -139,6 +269,81 @@ export function responseWarnings(value: unknown): string[] {
       "The Timber backend returned an invalid mutation response.",
     );
   return value.warnings;
+}
+
+export function parseWorktreeState(value: unknown): WorktreeState {
+  if (!record(value) || !isWorktree(value.worktree) || !isPrEntry(value.pr))
+    throw new Error("The Timber backend returned an invalid worktree state.");
+  return { worktree: value.worktree, pr: value.pr };
+}
+
+export function parsePrCreated(value: unknown): PrCreated {
+  if (
+    !record(value) ||
+    typeof value.url !== "string" ||
+    typeof value.number !== "number" ||
+    typeof value.created !== "boolean"
+  )
+    throw new Error("The Timber backend returned an invalid PR response.");
+  return { url: value.url, number: value.number, created: value.created };
+}
+
+export function parseTodoList(value: unknown): TodoList {
+  if (
+    !record(value) ||
+    (value.scope !== "worktree" && value.scope !== "repo") ||
+    !record(value.summary) ||
+    typeof value.summary.incomplete !== "number" ||
+    typeof value.summary.complete !== "number" ||
+    !Array.isArray(value.todos)
+  )
+    throw new Error("The Timber backend returned an invalid TODO list.");
+  const todos: TodoItem[] = [];
+  for (const entry of value.todos) {
+    if (
+      record(entry) &&
+      typeof entry.id === "number" &&
+      typeof entry.title === "string" &&
+      typeof entry.complete === "boolean" &&
+      typeof entry.depth === "number"
+    ) {
+      todos.push({
+        id: entry.id,
+        title: entry.title,
+        complete: entry.complete,
+        depth: entry.depth,
+      });
+    }
+  }
+  return {
+    scope: value.scope,
+    summary: {
+      incomplete: value.summary.incomplete,
+      complete: value.summary.complete,
+    },
+    todos,
+  };
+}
+
+export function parseSessions(value: unknown): SessionEntry[] {
+  if (!record(value) || !Array.isArray(value.sessions))
+    throw new Error("The Timber backend returned an invalid session list.");
+  const sessions: SessionEntry[] = [];
+  for (const entry of value.sessions) {
+    if (
+      record(entry) &&
+      typeof entry.id === "string" &&
+      typeof entry.title === "string" &&
+      (entry.updated === null || typeof entry.updated === "number")
+    ) {
+      sessions.push({
+        id: entry.id,
+        title: entry.title,
+        updated: entry.updated,
+      });
+    }
+  }
+  return sessions;
 }
 
 export function message(error: unknown): string {

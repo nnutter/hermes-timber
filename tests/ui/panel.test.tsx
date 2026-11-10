@@ -14,8 +14,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as matchers from "@testing-library/jest-dom/matchers";
 import type { TestingLibraryMatchers } from "@testing-library/jest-dom/matchers";
 
-// jest-dom's bundled adapter targets Vitest 4's one-parameter Assertion.
-// Vitest 5 exposes the result type and subject type separately.
 declare module "vitest" {
   interface Assertion<
     R extends void | Promise<void> = void,
@@ -23,14 +21,27 @@ declare module "vitest" {
   > extends TestingLibraryMatchers<T, R> {}
 }
 expect.extend(matchers);
-import type { PluginContext } from "@hermes/plugin-sdk";
+
+import type {
+  KeybindContribution,
+  PaletteContribution,
+  PluginContext,
+  RouteContribution,
+  SidebarNavContribution,
+} from "@hermes/plugin-sdk";
 import { TimberPanel } from "../../ui/panel";
 import plugin from "../../ui/plugin";
-import type { TimberState, Worktree } from "../../ui/contracts";
-import { host, queryClient, resetHost, switchScope } from "./sdk-stub";
+import { TodoView } from "../../ui/todos";
+import type {
+  PrEntry,
+  TimberState,
+  TodoList,
+  Worktree,
+} from "../../ui/contracts";
+import { host, os, resetHost, switchScope } from "./sdk-stub";
 import { scopeKey } from "../../ui/scope";
 
-const clean: Worktree = {
+const done: Worktree = {
   name: "done",
   repo: "app",
   path: "/trees/app/done",
@@ -44,6 +55,7 @@ const clean: Worktree = {
   todoDone: 2,
   todoTotal: 3,
   pullRequest: "#12",
+  review: { approved: 2, total: 4 },
 };
 const dirty: Worktree = {
   name: "working",
@@ -52,6 +64,8 @@ const dirty: Worktree = {
   clean: false,
   merged: false,
   statusError: false,
+  ahead: 1,
+  behind: 0,
 };
 const broken: Worktree = {
   name: "broken",
@@ -66,26 +80,31 @@ const state: TimberState = {
   hermes_home: "/home/test/.hermes",
   repositories: ["app", "lib", "empty"],
   projects: { app: "project-app", lib: "project-lib" },
-  worktrees: [dirty, clean, broken],
+  worktrees: [dirty, done, broken],
   warnings: [],
+  at: 0,
+  fetchedAt: null,
+  fetchError: null,
+  prs: {},
+  prsAt: 1,
 };
 const rest = vi.fn<PluginContext["rest"]>();
 const register = vi.fn<PluginContext["register"]>(() => () => {});
+const registerMany = vi.fn<PluginContext["registerMany"]>(() => () => {});
 const context: PluginContext = {
   rest: async <T,>(
     path: string,
     options?: Parameters<PluginContext["rest"]>[1],
   ) => (await rest(path, options)) as T,
   register,
+  registerMany,
+  os,
 };
 let client: QueryClient;
 
-function mount(mutationRetries = 0) {
+function mountPanel() {
   client = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false },
-      mutations: { retry: mutationRetries, retryDelay: 1 },
-    },
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
     <StrictMode>
@@ -95,6 +114,32 @@ function mount(mutationRetries = 0) {
     </StrictMode>,
   );
 }
+
+function mountTodo() {
+  client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return render(
+    <StrictMode>
+      <QueryClientProvider client={client}>
+        <TodoView
+          context={context}
+          scope={scopeKey()}
+          online
+          cwd={dirty.path}
+          surface="panel"
+        />
+      </QueryClientProvider>
+    </StrictMode>,
+  );
+}
+
+async function loaded(text = "done") {
+  const list = await screen.findByRole("list", { name: "Worktrees" });
+  await within(list).findByText(text);
+  return list;
+}
+
 function deferred() {
   let resolve: (value: unknown) => void = () => {};
   const promise = new Promise<unknown>((done) => {
@@ -102,21 +147,18 @@ function deferred() {
   });
   return { promise, resolve };
 }
-async function loaded() {
-  await screen.findByText(
-    (_, element) =>
-      element?.tagName === "DIV" && element.textContent === "done @ app",
-  );
+
+function order(list: HTMLElement) {
+  return within(list)
+    .getAllByRole("listitem")
+    .map((item) => item.getAttribute("data-worktree"));
 }
-async function refresh() {
-  await act(async () => {
-    await client.refetchQueries({ queryKey: ["hermes-timber"] });
-  });
-}
+
 beforeEach(() => {
   resetHost();
   rest.mockReset();
   register.mockClear();
+  registerMany.mockClear();
   rest.mockResolvedValue(state);
 });
 afterEach(() => {
@@ -125,326 +167,38 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("Timber desktop panel", () => {
-  it("adds a repository from an empty list and refreshes", async () => {
-    const empty = { ...state, repositories: [], worktrees: [], projects: {} };
-    rest.mockImplementation(async (path) =>
-      path === "/repositories"
-        ? { repository: "new/repo", warnings: [] }
-        : empty,
-    );
-    mount();
-    const user = userEvent.setup();
-    await user.click(
-      await screen.findByRole("button", { name: "Add repository" }),
-    );
-    await user.type(
-      screen.getByLabelText("Repository URL or path"),
-      "/tmp/origin",
-    );
-    await user.type(
-      screen.getByLabelText("Repository name (optional)"),
-      "new/repo",
-    );
-    await user.type(screen.getByLabelText("Alias (optional)"), "short");
-    await user.click(screen.getByRole("button", { name: "Add repo" }));
-    await waitFor(() =>
-      expect(rest).toHaveBeenCalledWith("/repositories", {
-        method: "POST",
-        body: { source: "/tmp/origin", name: "new/repo", alias: "short" },
+describe("Timber worktrees", () => {
+  it("renders rows with counts, review progress, and one action", async () => {
+    mountPanel();
+    const list = await loaded();
+    expect(within(list).getAllByRole("listitem")).toHaveLength(3);
+    const doneItem = within(list).getByTitle("/trees/app/done").closest("li");
+    if (!doneItem) throw new Error("done row missing");
+    expect(
+      within(doneItem).getByLabelText("TODO 2 of 3 done"),
+    ).toHaveTextContent("2/3");
+    expect(
+      within(doneItem).getByRole("img", {
+        name: "Review 2 of 4 commits approved",
       }),
-    );
-    const indicator = await screen.findByRole("status", {
-      name: "Repository added",
-    });
+    ).toHaveTextContent("2/4");
     expect(
-      screen.getByRole("button", { name: "Add repository" })
-        .previousElementSibling,
-    ).toBe(indicator);
-    expect(screen.queryByText("Completed.")).not.toBeInTheDocument();
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    expect(indicator).toBeVisible();
-    await waitFor(() => expect(indicator).not.toBeInTheDocument(), {
-      timeout: 1500,
-    });
+      within(list).getAllByRole("img", { name: "Review status unknown" })[0],
+    ).toHaveTextContent("?");
     expect(
-      rest.mock.calls.filter(([path]) => path === "/state").length,
-    ).toBeGreaterThan(1);
+      within(doneItem).getByRole("button", { name: "Remove done@app" }),
+    ).toBeInTheDocument();
+    expect(
+      within(list).getByRole("button", {
+        name: "Open or create a PR for working@app",
+      }),
+    ).toBeInTheDocument();
   });
 
-  it("retains add warnings and restarts the success timer on another add", async () => {
-    rest.mockImplementation(async (path) =>
-      path === "/repositories"
-        ? { repository: "new", warnings: ["Project sync failed"] }
-        : state,
-    );
-    mount();
-    const user = userEvent.setup();
-    await loaded();
-    const add = async () => {
-      await user.click(screen.getByRole("button", { name: "Add repository" }));
-      await user.type(screen.getByLabelText("Repository URL or path"), "/repo");
-      await user.click(screen.getByRole("button", { name: "Add repo" }));
-      await screen.findByRole("status", { name: "Repository added" });
-    };
-    await add();
-    expect(screen.getByText("Project sync failed")).toBeVisible();
-    await new Promise((resolve) => setTimeout(resolve, 1200));
-    await add();
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    expect(
-      screen.getByRole("status", { name: "Repository added" }),
-    ).toBeVisible();
-    await waitFor(
-      () =>
-        expect(
-          screen.queryByRole("status", { name: "Repository added" }),
-        ).not.toBeInTheDocument(),
-      { timeout: 1500 },
-    );
-    expect(screen.getByText("Project sync failed")).toBeVisible();
-  });
-
-  it("reports a missing repository endpoint and recovers unrelated actions without replay", async () => {
-    rest.mockImplementation(async (path) => {
-      if (path === "/repositories")
-        throw Object.assign(new Error('404: {"detail":"Not Found"}'), {
-          status: 404,
-        });
-      return state;
-    });
-    mount();
-    const user = userEvent.setup();
-    await loaded();
-    await user.click(screen.getByRole("button", { name: "Add repository" }));
-    await user.type(
-      screen.getByLabelText("Repository URL or path"),
-      "git@github.com:nnutter/tuicr",
-    );
-    await user.click(screen.getByRole("button", { name: "Add repo" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "backend may be outdated",
-    );
-    expect(
-      screen.queryByRole("status", { name: "Repository added" }),
-    ).not.toBeInTheDocument();
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "New worktree" }),
-      ).toBeEnabled(),
-    );
-    expect(screen.getByRole("button", { name: "Add repo" })).toBeDisabled();
-    expect(screen.getByRole("alert")).toHaveTextContent("partially completed");
-    expect(
-      rest.mock.calls.filter(([path]) => path === "/repositories"),
-    ).toHaveLength(1);
-    expect(rest.mock.calls.filter(([path]) => path === "/state")).toHaveLength(
-      2,
-    );
-    await user.click(screen.getByRole("button", { name: "Refresh" }));
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Add repo" })).toBeEnabled(),
-    );
-  });
-
-  it("keeps actions disabled if recovery returns invalid state", async () => {
-    rest.mockImplementation(async (path) => {
-      if (path === "/repositories") throw new Error("<unsafe failure>");
-      return rest.mock.calls.filter(([item]) => item === "/state").length === 1
-        ? state
-        : {};
-    });
-    mount();
-    const user = userEvent.setup();
-    await loaded();
-    await user.click(screen.getByRole("button", { name: "Add repository" }));
-    await user.type(
-      screen.getByLabelText("Repository URL or path"),
-      "nnutter/tuicr",
-    );
-    await user.click(screen.getByRole("button", { name: "Add repo" }));
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "New worktree" }),
-      ).toBeDisabled(),
-    );
-    expect(screen.getByText(/<unsafe failure>/)).toBeVisible();
-    expect(document.querySelector("unsafe")).toBeNull();
-    expect(screen.getByText(/invalid state response/)).toBeVisible();
-  });
-
-  it.each([
-    [true, true, "Merged", "success"],
-    [false, true, "Merged", "warn"],
-    [true, false, "Clean", "muted"],
-    [false, false, "Dirty", "warn"],
-  ])(
-    "shows one status badge for clean=%s merged=%s",
-    async (isClean, merged, label, variant) => {
-      rest.mockResolvedValue({
-        ...state,
-        worktrees: [{ ...clean, clean: isClean, merged }],
-      });
-      mount();
-      await loaded();
-      const row = screen.getByRole("listitem");
-      expect(within(row).getByText(label)).toHaveAttribute(
-        "data-variant",
-        variant,
-      );
-      expect(within(row).queryAllByText(/^(Clean|Dirty|Merged)$/)).toHaveLength(
-        1,
-      );
-    },
-  );
-
-  it.each([401, 403])(
-    "pauses automatic reads after HTTP %i until explicit retry",
-    async (status) => {
-      vi.useFakeTimers();
-      mount();
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(1);
-      });
-      expect(
-        screen.getByText(
-          (_, element) =>
-            element?.tagName === "DIV" && element.textContent === "done @ app",
-        ),
-      ).toBeVisible();
-      rest.mockRejectedValue(new Error(`${status}: {"reason":"no_cookie"}`));
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(15_000);
-      });
-      expect(rest).toHaveBeenCalledTimes(2);
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(600_000);
-      });
-      expect(rest).toHaveBeenCalledTimes(2);
-      await act(async () => {
-        host.state.gateway.set("closed");
-        host.state.gateway.set("open");
-        await vi.advanceTimersByTimeAsync(60_000);
-      });
-      expect(rest).toHaveBeenCalledTimes(2);
-      expect(screen.getByRole("alert")).toHaveTextContent(
-        "Automatic requests are paused",
-      );
-      expect(
-        screen.getByRole("button", { name: "Add repository" }),
-      ).toBeDisabled();
-      rest.mockResolvedValue(state);
-      await act(async () => {
-        fireEvent.click(
-          screen.getByRole("button", { name: "Retry after sign-in" }),
-        );
-        await vi.advanceTimersByTimeAsync(1);
-      });
-      expect(rest).toHaveBeenCalledTimes(3);
-      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(15_000);
-      });
-      expect(rest).toHaveBeenCalledTimes(4);
-    },
-  );
-
-  it("backs off failed reads exponentially to a cap and resets after recovery", async () => {
-    vi.useFakeTimers();
-    rest.mockRejectedValue(new Error("503: gateway unavailable"));
-    mount();
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(0);
-    });
-    expect(rest).toHaveBeenCalledTimes(1);
-    let attempts = 1;
-    for (const delay of [30_000, 60_000, 120_000, 240_000, 300_000, 300_000]) {
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(delay - 1);
-      });
-      expect(rest).toHaveBeenCalledTimes(attempts);
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(1);
-      });
-      attempts++;
-      expect(rest).toHaveBeenCalledTimes(attempts);
-    }
-    rest.mockResolvedValue(state);
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(300_000);
-    });
-    expect(rest).toHaveBeenCalledTimes(attempts + 1);
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(14_999);
-    });
-    expect(rest).toHaveBeenCalledTimes(attempts + 1);
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1);
-    });
-    expect(rest).toHaveBeenCalledTimes(attempts + 2);
-  });
-
-  it("pauses after mutation auth failure without replaying the mutation", async () => {
-    vi.useFakeTimers();
-    rest
-      .mockResolvedValueOnce(state)
-      .mockRejectedValue(
-        Object.assign(new Error("Access denied"), { statusCode: 401 }),
-      );
-    mount(3);
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1);
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "New worktree" }));
-      await vi.advanceTimersByTimeAsync(1);
-      fireEvent.click(screen.getByRole("button", { name: "Create worktree" }));
-      await vi.advanceTimersByTimeAsync(600_000);
-    });
-    expect(rest.mock.calls.filter(([path]) => path === "/create")).toHaveLength(
-      1,
-    );
-    expect(rest.mock.calls.filter(([path]) => path === "/state")).toHaveLength(
-      1,
-    );
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "Automatic requests are paused",
-    );
-    rest.mockResolvedValue(state);
-    await act(async () => {
-      fireEvent.click(
-        screen.getByRole("button", { name: "Retry after sign-in" }),
-      );
-      await vi.advanceTimersByTimeAsync(1);
-    });
-    expect(rest.mock.calls.filter(([path]) => path === "/create")).toHaveLength(
-      1,
-    );
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-  });
-
-  it("rejects unknown worktree status instead of enabling cleanup", async () => {
-    const { statusError: _unknownStatus, ...unknownStatus } = clean;
-    rest.mockResolvedValue({ ...state, worktrees: [unknownStatus] });
-    mount();
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "invalid state response",
-    );
-    expect(
-      screen.queryByRole("button", { name: "Remove done@app" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Add repository" }),
-    ).toBeDisabled();
-  });
-
-  it("searches contiguous fields and visible statuses and sorts rows", async () => {
-    mount();
-    await loaded();
-    const list = screen.getByRole("list", { name: "Worktrees" });
+  it("searches contiguous fields and cycles the sort modes", async () => {
+    mountPanel();
+    const list = await loaded();
     const search = screen.getByLabelText("Find worktrees");
-    expect(screen.queryByLabelText("Repository")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Status")).not.toBeInTheDocument();
     for (const [query, count] of [
       ["DONE@APP", 1],
       ["done @ app", 1],
@@ -465,111 +219,94 @@ describe("Timber desktop panel", () => {
       );
     }
     fireEvent.change(search, { target: { value: "" } });
-    fireEvent.change(screen.getByLabelText("Sort worktrees"), {
-      target: { value: "name" },
-    });
-    expect(
-      within(list)
-        .getAllByRole("listitem")
-        .map(
-          (item) =>
-            within(item).getByText(
-              (_, element) =>
-                element?.tagName === "DIV" &&
-                ["broken @ lib", "done @ app", "working @ app"].includes(
-                  element.textContent ?? "",
-                ),
-            ).textContent,
-        ),
-    ).toEqual(["broken @ lib", "done @ app", "working @ app"]);
-    expect(screen.getByTitle("/trees/app/done")).toHaveTextContent("done");
-    expect(screen.getByTitle("Upstream: origin/main")).toHaveTextContent("app");
-    expect(screen.getAllByTitle("No upstream").length).toBeGreaterThan(0);
-    expect(
-      within(list)
-        .getByLabelText("TODO 2 of 3 done")
-        .querySelector('[data-icon="check-all"]'),
-    ).toBeInTheDocument();
-    expect(within(list).getByLabelText("TODO 2 of 3 done")).toHaveTextContent(
-      "2/3",
+    expect(order(list)).toEqual(["app/working", "app/done", "lib/broken"]);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Sort worktrees" }),
     );
+    expect(order(list)).toEqual(["app/done", "app/working", "lib/broken"]);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Sort worktrees" }),
+    );
+    expect(order(list)).toEqual(["lib/broken", "app/done", "app/working"]);
   });
 
-  it("shows review progress after TODO and marks missing status as unknown", async () => {
-    const reviewed = { ...clean, review: { approved: 2, total: 4 } };
-    rest.mockResolvedValue({ ...state, worktrees: [reviewed, dirty] });
-    mount();
-    await loaded();
-
-    const list = screen.getByRole("list", { name: "Worktrees" });
-    const todo = within(list).getByLabelText("TODO 2 of 3 done");
-    const review = within(list).getByRole("img", {
-      name: "Review 2 of 4 commits approved",
-    });
-    expect(review).toHaveTextContent("2/4");
-    expect(review.querySelector('[data-icon="eye"]')).toBeInTheDocument();
-    expect(
-      todo.compareDocumentPosition(review) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    expect(
-      within(list).getByRole("img", { name: "Review status unknown" }),
-    ).toHaveTextContent("?");
-  });
-
-  it("rejects malformed review counts from the backend", async () => {
-    const malformed = { ...clean, review: { approved: "2", total: 4 } };
-    rest.mockResolvedValue({ ...state, worktrees: [malformed] });
-    mount();
-
+  it("rejects unknown worktree status and disables actions", async () => {
+    const { statusError: _unknownStatus, ...unknownStatus } = done;
+    rest.mockResolvedValue({ ...state, worktrees: [unknownStatus] });
+    mountPanel();
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "invalid state response",
     );
     expect(
-      screen.getByRole("button", { name: "Add repository" }),
-    ).toBeDisabled();
+      screen.queryByRole("button", { name: /Remove done/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "More actions" })).toBeDisabled();
   });
 
-  it("creates with Timber-selected branch and explicit upstream, then refreshes", async () => {
-    const user = userEvent.setup();
-    rest
-      .mockResolvedValueOnce(state)
-      .mockResolvedValueOnce({
-        worktree: clean,
-        warnings: ["Project synchronized"],
-      })
-      .mockResolvedValue({ ...state, worktrees: [clean] });
-    mount();
+  it("rejects malformed review counts", async () => {
+    const malformed = { ...done, review: { approved: "2", total: 4 } };
+    rest.mockResolvedValue({ ...state, worktrees: [malformed] });
+    mountPanel();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "invalid state response",
+    );
+    expect(screen.getByRole("button", { name: "More actions" })).toBeDisabled();
+  });
+
+  it("creates a worktree and opens its session", async () => {
+    let created = false;
+    rest.mockImplementation(async (path) => {
+      if (path === "/create") {
+        created = true;
+        return { worktree: done, warnings: ["Project synchronized"] };
+      }
+      if (path.startsWith("/sessions?")) return { sessions: [] };
+      return created ? { ...state, worktrees: [done] } : state;
+    });
+    host.request.mockImplementation(async (method) => {
+      if (method === "projects.set_active") return { active_id: "project-app" };
+      if (method === "session.create")
+        return { stored_session_id: "s1", info: { cwd: done.path } };
+      if (method === "session.workspace.move") return { cwd: done.path };
+      return null;
+    });
+    mountPanel();
     await loaded();
-    await user.click(screen.getByRole("button", { name: "New worktree" }));
-    await user.selectOptions(
+    await userEvent.click(screen.getByRole("button", { name: "New worktree" }));
+    await userEvent.selectOptions(
       screen.getByLabelText("Create repository"),
       "empty",
     );
-    await user.type(
+    await userEvent.type(
       screen.getByLabelText("Upstream (optional)"),
       "origin/main",
     );
-    await user.click(screen.getByRole("button", { name: "Create worktree" }));
-    await waitFor(() =>
-      expect(
-        screen.queryByRole("form", { name: "Create worktree" }),
-      ).not.toBeInTheDocument(),
+    await userEvent.click(
+      screen.getByRole("button", { name: "Create worktree" }),
     );
-    expect(rest).toHaveBeenCalledWith("/create", {
-      method: "POST",
-      body: { repo: "empty", name: "", upstream: "origin/main" },
-    });
-    await screen.findByText("Project synchronized");
+    await waitFor(() =>
+      expect(rest).toHaveBeenCalledWith("/create", {
+        method: "POST",
+        body: { repo: "empty", name: "", upstream: "origin/main" },
+      }),
+    );
+    await screen.findByText("Created done@app.");
+    expect(host.openSession).toHaveBeenCalledWith(
+      "s1",
+      expect.objectContaining({ profile: "default" }),
+    );
     await screen.findByText("1 of 1 worktrees");
+    expect(screen.getByText("Project synchronized")).toBeVisible();
   });
 
-  it("blocks retries after a failed creation until the listing is refreshed", async () => {
-    rest
-      .mockResolvedValueOnce(state)
-      .mockRejectedValueOnce(
-        new Error("Creation outcome unknown; refresh before retrying"),
-      );
-    mount();
+  it("blocks create retries until a refresh clears the uncertainty", async () => {
+    rest.mockImplementation(async (path) => {
+      if (path === "/create")
+        throw new Error("Creation outcome unknown; refresh before retrying");
+      if (path === "/fetch") return { fetchedAt: 1, errors: [] };
+      return state;
+    });
+    mountPanel();
     await loaded();
     await userEvent.click(screen.getByRole("button", { name: "New worktree" }));
     await userEvent.click(
@@ -579,23 +316,8 @@ describe("Timber desktop panel", () => {
       "Creation outcome unknown",
     );
     expect(
-      screen.getByText(
-        (_, element) =>
-          element?.tagName === "DIV" && element.textContent === "done @ app",
-      ),
-    ).toBeVisible();
-    expect(
       screen.getByRole("button", { name: "Create worktree" }),
     ).toBeDisabled();
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Add repository" }),
-      ).toBeEnabled(),
-    );
-    expect(rest.mock.calls.filter(([path]) => path === "/create")).toHaveLength(
-      1,
-    );
-    rest.mockResolvedValue(state);
     await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
     await waitFor(() =>
       expect(
@@ -604,26 +326,243 @@ describe("Timber desktop panel", () => {
     );
   });
 
-  it("syncs from the palette while the panel is closed without duplicates", async () => {
+  it("imports a repository from the toolbar menu", async () => {
+    let added = false;
+    rest.mockImplementation(async (path) => {
+      if (path === "/repositories") {
+        added = true;
+        return { repository: "new/repo", warnings: ["Project sync failed"] };
+      }
+      if (path === "/fetch") return { fetchedAt: 1, errors: [] };
+      return added
+        ? { ...state, repositories: ["new/repo", "app", "lib", "empty"] }
+        : state;
+    });
+    mountPanel();
+    await loaded();
+    await userEvent.click(screen.getByRole("button", { name: "More actions" }));
+    await userEvent.click(
+      screen.getByRole("menuitem", { name: "Import repo" }),
+    );
+    await userEvent.type(
+      screen.getByLabelText("Repository URL or path"),
+      "/tmp/origin",
+    );
+    await userEvent.type(
+      screen.getByLabelText("Repository name (optional)"),
+      "new/repo",
+    );
+    await userEvent.type(screen.getByLabelText("Alias (optional)"), "short");
+    await userEvent.click(screen.getByRole("button", { name: "Add repo" }));
+    await waitFor(() =>
+      expect(rest).toHaveBeenCalledWith("/repositories", {
+        method: "POST",
+        body: { source: "/tmp/origin", name: "new/repo", alias: "short" },
+      }),
+    );
+    await screen.findByText("Project sync failed");
+  });
+
+  it("previews and confirms a removal with a token", async () => {
+    let removed = false;
+    rest.mockImplementation(async (path) => {
+      if (path === "/remove/preview")
+        return {
+          token: "token",
+          worktree: done,
+          branch: "done",
+          warning: "Removes the checkout and branch.",
+        };
+      if (path === "/remove") {
+        removed = true;
+        return { removed: "done@app", warnings: [] };
+      }
+      if (path === "/sessions/archive") return { archived: 1, total: 1 };
+      return removed ? { ...state, worktrees: [dirty, broken] } : state;
+    });
+    mountPanel();
+    await loaded();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Remove done@app" }),
+    );
+    await userEvent.click(
+      await screen.findByRole("button", {
+        name: /Click again within 5s to delete done@app/,
+      }),
+    );
+    await waitFor(() =>
+      expect(rest).toHaveBeenCalledWith("/remove", {
+        method: "POST",
+        body: { token: "token" },
+      }),
+    );
+    await screen.findByText("Removed done@app. Archived 1 session.");
+  });
+
+  it("opens the newest session already in the worktree folder", async () => {
+    rest.mockImplementation(async (path) => {
+      if (path.startsWith("/sessions?"))
+        return {
+          sessions: [{ id: "s1", title: "done@app", updated: 1 }],
+        };
+      return state;
+    });
+    mountPanel();
+    await loaded();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Open session in done@app" }),
+    );
+    await waitFor(() =>
+      expect(host.openSession).toHaveBeenCalledWith(
+        "s1",
+        expect.objectContaining({ profile: "default" }),
+      ),
+    );
+    expect(host.request).not.toHaveBeenCalled();
+    await screen.findByText("Opened the latest session in done@app.");
+  });
+
+  it("refuses an opened session whose cwd was not confirmed", async () => {
+    rest.mockImplementation(async (path) =>
+      path.startsWith("/sessions?") ? { sessions: [] } : state,
+    );
+    host.request.mockImplementation(async (method) => {
+      if (method === "projects.set_active") return { active_id: "project-app" };
+      if (method === "session.create")
+        return { stored_session_id: "s1", info: { cwd: "/wrong" } };
+      return null;
+    });
+    mountPanel();
+    await loaded();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Open session in done@app" }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "did not confirm the requested working directory",
+    );
+    expect(host.openSession).not.toHaveBeenCalled();
+  });
+
+  it("selects push, merge, open-PR, and create-PR actions from PR state", async () => {
+    const ready: Worktree = {
+      name: "ready",
+      repo: "app",
+      path: "/trees/app/ready",
+      clean: true,
+      merged: false,
+      statusError: false,
+      ahead: 1,
+      behind: 0,
+      commit: "r",
+    };
+    const blocked: Worktree = {
+      name: "blocked",
+      repo: "app",
+      path: "/trees/app/blocked",
+      clean: true,
+      merged: false,
+      statusError: false,
+      ahead: 1,
+      behind: 0,
+      commit: "b",
+    };
+    const nopr: Worktree = {
+      name: "nopr",
+      repo: "app",
+      path: "/trees/app/nopr",
+      clean: true,
+      merged: false,
+      statusError: false,
+      ahead: 1,
+      behind: 0,
+      commit: "n",
+    };
+    const prs: Record<string, PrEntry> = {
+      ["app\0ready"]: {
+        number: 7,
+        url: "https://github.com/o/r/pull/7",
+        title: "Ready",
+        destExists: true,
+        unpushed: 0,
+        ff: true,
+        mergeBlocker: null,
+        checks: "passed",
+        repo: "o/r",
+        stack: null,
+      },
+      ["app\0blocked"]: {
+        number: 8,
+        url: "https://github.com/o/r/pull/8",
+        title: "Blocked",
+        destExists: true,
+        unpushed: 0,
+        ff: true,
+        mergeBlocker: "Checks have not all passed",
+        checks: "pending",
+        repo: "o/r",
+        stack: null,
+      },
+    };
+    rest.mockImplementation(async (path) => {
+      if (path === "/merge")
+        return { merged: 7, url: "https://github.com/o/r/pull/7", state: null };
+      if (path === "/pr")
+        return {
+          url: "https://github.com/o/r/pull/9",
+          number: 9,
+          created: true,
+        };
+      return {
+        ...state,
+        worktrees: [ready, blocked, nopr],
+        prs,
+      };
+    });
+    mountPanel();
+    const list = await loaded("ready");
+    expect(within(list).getAllByRole("listitem")).toHaveLength(3);
+    await userEvent.click(
+      within(list).getByRole("button", { name: "Merge PR #7" }),
+    );
+    await waitFor(() =>
+      expect(rest).toHaveBeenCalledWith("/merge", {
+        method: "POST",
+        body: { repo: "app", name: "ready" },
+      }),
+    );
+    await userEvent.click(
+      within(list).getByRole("button", {
+        name: /Cannot merge yet \(Checks have not all passed\); open PR #8/,
+      }),
+    );
+    expect(os.openExternal).toHaveBeenCalledWith(
+      "https://github.com/o/r/pull/8",
+    );
+    await userEvent.click(
+      within(list).getByRole("button", {
+        name: "Open or create a PR for nopr@app",
+      }),
+    );
+    await userEvent.type(screen.getByLabelText("Subject"), "Title");
+    await userEvent.click(screen.getByRole("button", { name: "Create PR" }));
+    await waitFor(() =>
+      expect(rest).toHaveBeenCalledWith("/pr", {
+        method: "POST",
+        body: { repo: "app", name: "nopr", title: "Title", body: "" },
+      }),
+    );
+  });
+
+  it("syncs projects from the palette once", async () => {
     const pending = deferred();
-    const key = ["hermes-timber", scopeKey(), "state"];
-    const other = ["hermes-timber", "another-scope", "state"];
-    queryClient.setQueryData(key, state);
-    queryClient.setQueryData(other, state);
     rest.mockReturnValue(pending.promise);
     plugin.register(context);
-    const data = register.mock.calls
-      .map(([item]) => item)
-      .find((item) => item.id === "sync-projects")?.data;
-    if (
-      typeof data !== "object" ||
-      data === null ||
-      !("run" in data) ||
-      typeof data.run !== "function"
-    )
-      throw new Error("Missing sync command");
-    data.run();
-    data.run();
+    const contributions = registerMany.mock.calls[0]?.[0] ?? [];
+    const sync = contributions.find((item) => item.id === "sync-projects")
+      ?.data as PaletteContribution | undefined;
+    if (!sync) throw new Error("Missing sync command");
+    sync.run();
+    sync.run();
     expect(rest).toHaveBeenCalledTimes(1);
     expect(rest).toHaveBeenCalledWith("/sync", { method: "POST", body: {} });
     pending.resolve({ warnings: [] });
@@ -633,467 +572,139 @@ describe("Timber desktop panel", () => {
         message: "Projects synced.",
       }),
     );
-    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
-    expect(queryClient.getQueryState(other)?.isInvalidated).toBe(false);
   });
 
-  it.each([
-    [
-      { warnings: ["Folder belongs to another Project"] },
-      "warning",
-      "Folder belongs to another Project",
-    ],
-    [{ invalid: true }, "error", "invalid mutation response"],
-  ])(
-    "reports sync warnings and malformed responses",
-    async (response, kind, text) => {
-      rest.mockResolvedValue(response);
-      plugin.register(context);
-      const data = register.mock.calls
-        .map(([item]) => item)
-        .find((item) => item.id === "sync-projects")?.data;
-      if (
-        typeof data !== "object" ||
-        data === null ||
-        !("run" in data) ||
-        typeof data.run !== "function"
-      )
-        throw new Error("Missing sync command");
-      data.run();
-      await waitFor(() =>
-        expect(host.notify).toHaveBeenCalledWith({
-          kind,
-          message: expect.stringContaining(text),
-        }),
-      );
-      expect(rest).toHaveBeenCalledTimes(1);
-    },
-  );
+  it("registers pages, sidebar links, panes, and commands", () => {
+    plugin.register(context);
+    const contributions = registerMany.mock.calls[0]?.[0] ?? [];
+    const panes = contributions.filter((item) => item.area === "panes");
+    expect(panes.map((item) => item.title)).toEqual(["Worktrees", "TODOs"]);
+    expect(panes[0]?.data).toEqual({
+      placement: "right",
+      width: "440px",
+      collapsible: true,
+    });
+    const routes = contributions
+      .filter((item) => item.area === "routes")
+      .map((item) => (item.data as RouteContribution).path);
+    expect(routes).toEqual(["/timber", "/timber-todos"]);
+    const nav = contributions
+      .filter((item) => item.area === "sidebar.nav")
+      .map((item) => (item.data as SidebarNavContribution).path);
+    expect(nav).toEqual(["/timber", "/timber-todos"]);
+    const keybind = contributions.find(
+      (item) => item.id === "hermes-timber.show",
+    )?.data as KeybindContribution | undefined;
+    if (!keybind) throw new Error("Missing keybind");
+    keybind.run();
+    expect(host.revealPane).toHaveBeenCalledWith("hermes-timber:panel");
+    const show = contributions.find((item) => item.id === "show-timber")
+      ?.data as PaletteContribution | undefined;
+    if (!show) throw new Error("Missing show command");
+    show.run();
+    expect(host.navigate).toHaveBeenCalledWith("/timber");
+  });
 
   it("ignores a sync result after the gateway changes", async () => {
     const pending = deferred();
     rest.mockReturnValue(pending.promise);
     plugin.register(context);
-    const data = register.mock.calls
-      .map(([item]) => item)
-      .find((item) => item.id === "sync-projects")?.data;
-    if (
-      typeof data !== "object" ||
-      data === null ||
-      !("run" in data) ||
-      typeof data.run !== "function"
-    )
-      throw new Error("Missing sync command");
-    data.run();
-    switchScope("other");
+    const contributions = registerMany.mock.calls[0]?.[0] ?? [];
+    const sync = contributions.find((item) => item.id === "sync-projects")
+      ?.data as PaletteContribution | undefined;
+    if (!sync) throw new Error("Missing sync command");
+    sync.run();
+    await act(async () => {
+      switchScope("other");
+    });
     pending.resolve({ warnings: [] });
-    await act(async () => {
-      await pending.promise;
+    await waitFor(() => expect(host.notify).not.toHaveBeenCalled());
+  });
+});
+
+const todoList: TodoList = {
+  scope: "worktree",
+  summary: { incomplete: 1, complete: 1 },
+  todos: [
+    { id: 1, title: "First", complete: false, depth: 0 },
+    { id: 2, title: "Second", complete: true, depth: 1 },
+  ],
+};
+
+describe("Timber TODOs", () => {
+  beforeEach(() => {
+    rest.mockImplementation(async (path) => {
+      if (path.startsWith("/todo?")) return todoList;
+      if (path === "/todo-add")
+        return {
+          ...todoList,
+          summary: { incomplete: 2, complete: 1 },
+          todos: [
+            ...todoList.todos,
+            { id: 3, title: "New task", complete: false, depth: 0 },
+          ],
+        };
+      if (path === "/todo-toggle" || path === "/todo-remove") return todoList;
+      return state;
     });
-    expect(host.notify).not.toHaveBeenCalled();
-    expect(rest).toHaveBeenCalledTimes(1);
   });
 
-  it("previews the exact selector, path, and branch before token-only removal", async () => {
-    rest
-      .mockResolvedValueOnce(state)
-      .mockResolvedValueOnce({
-        token: "snapshot-1",
-        worktree: clean,
-        branch: "feature/done",
-        warning: "This deletes the branch.",
-      })
-      .mockResolvedValueOnce({ removed: true, warnings: [] })
-      .mockResolvedValue({ ...state, worktrees: [dirty] });
-    mount();
-    await loaded();
-    await userEvent.click(
-      screen.getByRole("button", { name: "Remove done@app" }),
-    );
-    const armed = await screen.findByTitle(/Click again to delete/);
-    expect(armed).toHaveAttribute(
-      "title",
-      expect.stringContaining("feature/done"),
-    );
-    expect(armed).toHaveAttribute(
-      "title",
-      expect.stringContaining("/trees/app/done"),
-    );
-    expect(armed).toHaveAttribute("title", expect.stringContaining("TODO"));
-    expect(armed).toHaveAccessibleName(
-      /feature\/done.*\/trees\/app\/done.*TODO/,
-    );
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(rest).toHaveBeenCalledWith("/remove/preview", {
-      method: "POST",
-      body: { repo: "app", name: "done" },
+  it("lists nested TODOs and reports the count", async () => {
+    mountTodo();
+    const list = await screen.findByRole("list", { name: "TODOs" });
+    expect(within(list).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(list).getByText("First")).toBeVisible();
+    expect(within(list).getByText("Second")).toHaveStyle({
+      textDecoration: "line-through",
     });
-    expect(rest.mock.calls.some(([path]) => path === "/remove")).toBe(false);
+    expect(screen.getByText("1 of 2 done")).toBeVisible();
+  });
+
+  it("adds, toggles, and removes items", async () => {
+    mountTodo();
+    await screen.findByRole("list", { name: "TODOs" });
+    await userEvent.type(screen.getByLabelText("New task"), "New task");
+    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+    await waitFor(() =>
+      expect(rest).toHaveBeenCalledWith("/todo-add", {
+        method: "POST",
+        body: {
+          repo: "app",
+          name: "working",
+          scope: "worktree",
+          text: "New task",
+        },
+      }),
+    );
+    await userEvent.click(screen.getByLabelText("Open: First"));
+    await waitFor(() =>
+      expect(rest).toHaveBeenCalledWith("/todo-toggle", {
+        method: "POST",
+        body: {
+          repo: "app",
+          name: "working",
+          scope: "worktree",
+          id: 1,
+          title: "First",
+          complete: true,
+        },
+      }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Remove First" }));
     await userEvent.click(
-      screen.getByRole("button", { name: /^Remove done@app/ }),
+      screen.getByRole("button", { name: "Confirm remove First" }),
     );
     await waitFor(() =>
-      expect(
-        screen.queryByTitle(/Click again to delete/),
-      ).not.toBeInTheDocument(),
+      expect(rest).toHaveBeenCalledWith("/todo-remove", {
+        method: "POST",
+        body: {
+          repo: "app",
+          name: "working",
+          scope: "worktree",
+          id: 1,
+          title: "First",
+        },
+      }),
     );
-    expect(rest).toHaveBeenCalledWith("/remove", {
-      method: "POST",
-      body: { token: "snapshot-1" },
-    });
-    await waitFor(() =>
-      expect(
-        screen.queryByText(
-          (_, element) =>
-            element?.tagName === "DIV" && element.textContent === "done @ app",
-        ),
-      ).not.toBeInTheDocument(),
-    );
-  });
-
-  it("expires removal consent and requires a fresh preview", async () => {
-    vi.useFakeTimers();
-    rest.mockResolvedValueOnce(state).mockResolvedValue({
-      token: "token",
-      worktree: clean,
-      branch: "done",
-      warning: "Delete",
-    });
-    mount();
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1);
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Remove done@app" }));
-      await vi.advanceTimersByTimeAsync(1);
-    });
-    expect(screen.getByTitle(/Click again to delete/)).toBeVisible();
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(5000);
-    });
-    expect(
-      screen.queryByTitle(/Click again to delete/),
-    ).not.toBeInTheDocument();
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Remove done@app" }));
-      await vi.advanceTimersByTimeAsync(1);
-    });
-    expect(
-      rest.mock.calls.filter(([path]) => path === "/remove/preview"),
-    ).toHaveLength(2);
-    expect(rest.mock.calls.some(([path]) => path === "/remove")).toBe(false);
-  });
-
-  it("discards a late preview after the search changes", async () => {
-    const pending = deferred();
-    rest
-      .mockResolvedValueOnce(state)
-      .mockImplementationOnce(() => pending.promise);
-    mount();
-    await loaded();
-    await userEvent.click(
-      screen.getByRole("button", { name: "Remove done@app" }),
-    );
-    fireEvent.change(screen.getByLabelText("Find worktrees"), {
-      target: { value: "done" },
-    });
-    await act(async () => {
-      pending.resolve({
-        token: "late",
-        worktree: clean,
-        branch: "done",
-        warning: "Delete",
-      });
-    });
-    expect(
-      screen.queryByTitle(/Click again to delete/),
-    ).not.toBeInTheDocument();
-    expect(rest.mock.calls.some(([path]) => path === "/remove")).toBe(false);
-  });
-
-  it("disarms consent on refresh and on gateway disconnect", async () => {
-    const preview = {
-      token: "token",
-      worktree: clean,
-      branch: "done",
-      warning: "Delete",
-    };
-    rest.mockImplementation(async (path) =>
-      path === "/remove/preview" ? preview : state,
-    );
-    mount();
-    await loaded();
-    await userEvent.click(
-      screen.getByRole("button", { name: "Remove done@app" }),
-    );
-    await screen.findByTitle(/Click again to delete/);
-    await refresh();
-    await waitFor(() =>
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
-    );
-    await userEvent.click(
-      screen.getByRole("button", { name: "Remove done@app" }),
-    );
-    await screen.findByTitle(/Click again to delete/);
-    act(() => host.state.gateway.set("closed"));
-    expect(
-      screen.queryByTitle(/Click again to delete/),
-    ).not.toBeInTheDocument();
-    act(() => host.state.gateway.set("open"));
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Remove done@app" }),
-      ).toBeEnabled(),
-    );
-    await userEvent.click(
-      screen.getByRole("button", { name: "Remove done@app" }),
-    );
-    await screen.findByTitle(/Click again to delete/);
-    expect(rest.mock.calls.some(([path]) => path === "/remove")).toBe(false);
-  });
-
-  it("keeps cached rows after a failed poll, disables actions, and recovers on refresh", async () => {
-    mount();
-    await loaded();
-    rest.mockRejectedValue(new Error("Backend unreachable"));
-    await refresh();
-    expect(
-      screen.getByText(
-        (_, element) =>
-          element?.tagName === "DIV" && element.textContent === "done @ app",
-      ),
-    ).toBeVisible();
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Cached results are stale",
-    );
-    expect(
-      screen.getByRole("button", { name: "Remove done@app" }),
-    ).toBeDisabled();
-    expect(
-      screen.getByRole("button", { name: "Add repository" }),
-    ).toBeDisabled();
-    rest.mockResolvedValue(state);
-    await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Add repository" }),
-      ).toBeEnabled(),
-    );
-    act(() => {
-      host.state.gateway.set("closed");
-    });
-    expect(
-      screen.getByRole("button", { name: "Open done@app in Hermes" }),
-    ).toBeDisabled();
-    expect(screen.getByText(/Gateway offline/)).toBeVisible();
-  });
-
-  it.each(["source", "profile", "epoch"])(
-    "discards rows and removal consent when the %s changes",
-    async (change) => {
-      rest.mockResolvedValueOnce(state).mockResolvedValueOnce({
-        token: "old-token",
-        worktree: clean,
-        branch: "done",
-        warning: "Delete",
-      });
-      mount();
-      await loaded();
-      await userEvent.click(
-        screen.getByRole("button", { name: "Remove done@app" }),
-      );
-      await screen.findByTitle(/Click again to delete/);
-      const pending = deferred();
-      rest.mockImplementation(() => pending.promise);
-      act(() => {
-        switchScope(
-          change === "source" ? "remote-b" : "local",
-          change === "profile" ? "work" : "default",
-        );
-      });
-      expect(
-        screen.queryByTitle(/Click again to delete/),
-      ).not.toBeInTheDocument();
-      expect(
-        screen.queryByText(
-          (_, element) =>
-            element?.tagName === "DIV" && element.textContent === "done @ app",
-        ),
-      ).not.toBeInTheDocument();
-      expect(
-        screen.getByRole("button", { name: "Add repository" }),
-      ).toBeDisabled();
-      await act(async () => {
-        pending.resolve({ ...state, worktrees: [], host: "gateway-b" });
-      });
-      await screen.findByText(/No worktrees yet/);
-    },
-  );
-
-  it("ignores an old preview completion after a same-profile source swap", async () => {
-    const pending = deferred();
-    rest
-      .mockResolvedValueOnce(state)
-      .mockImplementationOnce(() => pending.promise)
-      .mockResolvedValue({ ...state, worktrees: [] });
-    mount();
-    await loaded();
-    await userEvent.click(
-      screen.getByRole("button", { name: "Remove done@app" }),
-    );
-    act(() => {
-      switchScope("remote-b");
-    });
-    await screen.findByText(/No worktrees yet/);
-    await act(async () => {
-      pending.resolve({
-        token: "late-token",
-        worktree: clean,
-        branch: "done",
-        warning: "Delete",
-      });
-    });
-    expect(
-      screen.queryByTitle(/Click again to delete/),
-    ).not.toBeInTheDocument();
-    expect(rest.mock.calls.some(([path]) => path === "/remove")).toBe(false);
-  });
-
-  it("opens a cwd-verified session in its repository Project, not a cwd-less draft", async () => {
-    host.request
-      .mockResolvedValueOnce({ active_id: "project-app" })
-      .mockResolvedValueOnce({
-        stored_session_id: "stored-new",
-        info: { cwd: clean.path },
-      })
-      .mockResolvedValueOnce({ cwd: clean.path });
-    host.openSession.mockResolvedValue();
-    mount();
-    await loaded();
-    await userEvent.click(
-      screen.getByRole("button", { name: "Open done@app in Hermes" }),
-    );
-    await screen.findByText("Opened done@app in Hermes.");
-    expect(host.request).toHaveBeenNthCalledWith(1, "projects.set_active", {
-      id: "project-app",
-      profile: "default",
-    });
-    expect(host.request).toHaveBeenNthCalledWith(2, "session.create", {
-      cwd: clean.path,
-      title: "done",
-      source: "desktop",
-      profile: "default",
-    });
-    expect(host.request).toHaveBeenNthCalledWith(3, "session.workspace.move", {
-      session_key: "stored-new",
-      cwd: clean.path,
-      profile: "default",
-    });
-    expect(host.openSession).toHaveBeenCalledWith("stored-new", {
-      profile: "default",
-      awaitHydration: true,
-      keepAllProfilesScope: true,
-    });
-    expect(
-      within(screen.getByRole("list", { name: "Worktrees" })).getAllByRole(
-        "listitem",
-      )[0],
-    ).toHaveTextContent("done @ app");
-  });
-
-  it("refuses to navigate when session.create does not confirm the requested cwd", async () => {
-    host.request
-      .mockResolvedValueOnce({ active_id: "project-app" })
-      .mockResolvedValueOnce({
-        stored_session_id: "wrong",
-        info: { cwd: "/wrong" },
-      });
-    mount();
-    await loaded();
-    await userEvent.click(
-      screen.getByRole("button", { name: "Open done@app in Hermes" }),
-    );
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "did not confirm the requested working directory",
-    );
-    expect(host.openSession).not.toHaveBeenCalled();
-  });
-
-  it("does not create a session on a replacement route after project activation completes late", async () => {
-    const pending = deferred();
-    host.request.mockImplementationOnce(() => pending.promise);
-    mount();
-    await loaded();
-    await userEvent.click(
-      screen.getByRole("button", { name: "Open done@app in Hermes" }),
-    );
-    act(() => {
-      switchScope("remote-b");
-    });
-    await loaded();
-    await act(async () => {
-      pending.resolve({ active_id: "project-app" });
-    });
-    expect(host.request).toHaveBeenCalledTimes(1);
-    expect(host.openSession).not.toHaveBeenCalled();
-  });
-
-  it("rejects malformed backend state instead of rendering trusted-looking rows", async () => {
-    rest.mockResolvedValue({
-      ...state,
-      worktrees: [{ ...clean, clean: "yes" }],
-    });
-    mount();
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "invalid state response",
-    );
-    expect(
-      screen.queryByText(
-        (_, element) =>
-          element?.tagName === "DIV" && element.textContent === "done @ app",
-      ),
-    ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "New worktree" })).toBeDisabled();
-  });
-
-  it("registers a rebindable shortcut to reveal Timber", () => {
-    plugin.register(context);
-    const keybind = register.mock.calls
-      .map(([contribution]) => contribution)
-      .find((item) => item.area === "keybinds");
-    const binding = keybind?.data;
-    if (
-      typeof binding !== "object" ||
-      binding === null ||
-      !("run" in binding) ||
-      typeof binding.run !== "function" ||
-      !("defaults" in binding)
-    )
-      throw new Error("No keybind");
-    expect(binding.defaults).toEqual([]);
-    binding.run();
-    expect(host.revealPane).toHaveBeenCalledWith("hermes-timber:panel");
-  });
-
-  it("registers a native pane and a command that reveals that exact pane", () => {
-    plugin.register(context);
-    const pane = register.mock.calls
-      .map(([contribution]) => contribution)
-      .find((item) => item.area === "panes");
-    expect(pane?.title).toBe("Timber");
-    expect(pane?.data).toEqual({ placement: "right", width: "400px" });
-    const palette = register.mock.calls
-      .map(([contribution]) => contribution)
-      .find((item) => item.area === "palette");
-    const data = palette?.data;
-    if (
-      typeof data !== "object" ||
-      data === null ||
-      !("run" in data) ||
-      typeof data.run !== "function"
-    )
-      throw new Error("No palette command");
-    data.run();
-    expect(host.revealPane).toHaveBeenCalledWith("hermes-timber:panel");
   });
 });
