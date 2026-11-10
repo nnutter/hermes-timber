@@ -281,6 +281,24 @@ describe("Timber worktrees", () => {
     expect(screen.getByRole("button", { name: "More actions" })).toBeDisabled();
   });
 
+  it("shows a spinner in the action slot while state is pending", async () => {
+    const pending = deferred();
+    rest.mockImplementation(async (path) => {
+      if (path === "/fetch") return pending.promise;
+      return { ...state, fetchedAt: null, prsAt: null };
+    });
+    mountPanel();
+    const list = await loaded();
+    expect(
+      await within(list).findByRole("status", {
+        name: "Loading action for working@app",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(list).getByRole("button", { name: "Remove done@app" }),
+    ).toBeInTheDocument();
+  });
+
   it("rebases a worktree from its down count", async () => {
     const behind: Worktree = {
       name: "behind",

@@ -1904,6 +1904,7 @@ function WorktreeView({
                     const color = actionColor(action, worktree, pr?.checks);
                     const behind = worktree.behind ?? 0;
                     const canRebase = worktree.clean && !worktree.statusError && behind > 0;
+                    const statePending = !prsLoaded && !worktree.statusError && !worktree.merged;
                     const rebaseHint = !worktree.clean || worktree.statusError ? "Rebase requires a clean worktree; commit or stash changes first" : `Rebase ${behind} commit${behind === 1 ? "" : "s"} onto ${worktree.upstream ?? "upstream"}; conflicts are aborted`;
                     return /* @__PURE__ */ jsxs2(
                       "li",
@@ -2140,6 +2141,7 @@ function WorktreeView({
                                       pr,
                                       preview,
                                       disabled: disabled || rowBusy(worktree),
+                                      loading: statePending,
                                       running,
                                       onDelete: () => remove(worktree),
                                       onPush: () => push(worktree),
@@ -2301,6 +2303,7 @@ function RowActionButton({
   pr,
   preview,
   disabled,
+  loading,
   running,
   onDelete,
   onPush,
@@ -2311,7 +2314,18 @@ function RowActionButton({
   const armed = preview?.worktree.path === worktree.path;
   const idFor = (verb2) => rowActionId(verb2, worktree);
   if (action === null)
-    return /* @__PURE__ */ jsx2(
+    return loading ? /* @__PURE__ */ jsx2(
+      "span",
+      {
+        role: "status",
+        "aria-label": `Loading action for ${worktree.name}@${worktree.repo}`,
+        style: {
+          ...iconButton(TOOLBAR_HEIGHT),
+          color: "var(--ui-text-quaternary)"
+        },
+        children: /* @__PURE__ */ jsx2(Codicon2, { name: "loading", spinning: true, size: 16 })
+      }
+    ) : /* @__PURE__ */ jsx2(
       "span",
       {
         "aria-hidden": "true",

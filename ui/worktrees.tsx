@@ -1286,6 +1286,8 @@ export function WorktreeView({
             const behind = worktree.behind ?? 0;
             const canRebase =
               worktree.clean && !worktree.statusError && behind > 0;
+            const statePending =
+              !prsLoaded && !worktree.statusError && !worktree.merged;
             const rebaseHint =
               !worktree.clean || worktree.statusError
                 ? "Rebase requires a clean worktree; commit or stash changes first"
@@ -1526,6 +1528,7 @@ export function WorktreeView({
                       pr={pr}
                       preview={preview}
                       disabled={disabled || rowBusy(worktree)}
+                      loading={statePending}
                       running={running}
                       onDelete={() => remove(worktree)}
                       onPush={() => push(worktree)}
@@ -1693,6 +1696,7 @@ function RowActionButton({
   pr,
   preview,
   disabled,
+  loading,
   running,
   onDelete,
   onPush,
@@ -1706,6 +1710,7 @@ function RowActionButton({
   pr: PrEntry | undefined;
   preview: RemovePreview | null;
   disabled: boolean;
+  loading: boolean;
   running: Set<string>;
   onDelete: () => void;
   onPush: () => void;
@@ -1716,7 +1721,18 @@ function RowActionButton({
   const armed = preview?.worktree.path === worktree.path;
   const idFor = (verb: string) => rowActionId(verb, worktree);
   if (action === null)
-    return (
+    return loading ? (
+      <span
+        role="status"
+        aria-label={`Loading action for ${worktree.name}@${worktree.repo}`}
+        style={{
+          ...iconButton(TOOLBAR_HEIGHT),
+          color: "var(--ui-text-quaternary)",
+        }}
+      >
+        <Codicon name="loading" spinning size={16} />
+      </span>
+    ) : (
       <span
         aria-hidden="true"
         style={{ width: TOOLBAR_HEIGHT, flexShrink: 0 }}
