@@ -396,20 +396,26 @@ export function WorktreeView({
     } catch {
       // Session lookup is a convenience; a missing store creates a new chat.
     }
+    // A Project is only how the desktop groups the chat; an unmapped repository
+    // still gets a session, and a refused switch must not block the open.
     const project = data?.projects[worktree.repo];
-    if (!project)
-      throw new Error(
-        "No Hermes Project exists for this repository. Run Sync Projects from the command palette first.",
-      );
-    const selected = await host.request<unknown>("projects.set_active", {
-      id: project,
-      profile,
-    });
-    check();
-    if (!record(selected) || selected.active_id !== project)
-      throw new Error("Hermes did not activate the repository Project.");
+    if (project) {
+      try {
+        await host.request<unknown>("projects.set_active", {
+          id: project,
+          profile,
+        });
+      } catch {
+        // Grouping is a convenience; the chat still opens in the worktree.
+      }
+      check();
+    }
+    // cwd_explicit marks this as a deliberate workspace pick: without it the
+    // gateway hands a profile with a configured terminal.cwd that directory
+    // instead of the worktree, and the session lands outside the checkout.
     const created = await host.request<unknown>("session.create", {
       cwd: worktree.path,
+      cwd_explicit: true,
       title: sessionTitle(worktree),
       source: "desktop",
       profile,
@@ -432,14 +438,18 @@ export function WorktreeView({
       keepAllProfilesScope: true,
     });
     check();
-    const moved = await host.request<unknown>("session.workspace.move", {
-      session_key: created.stored_session_id,
-      cwd: worktree.path,
-      profile,
-    });
+    // The create already staked the workspace, so re-homing is a repair for
+    // backends that ignored it — never a reason to report the open as failed.
+    try {
+      await host.request<unknown>("session.workspace.move", {
+        session_key: created.stored_session_id,
+        cwd: worktree.path,
+        profile,
+      });
+    } catch {
+      // The chat is already open in the worktree the create was given.
+    }
     check();
-    if (!record(moved) || moved.cwd !== worktree.path)
-      throw new Error("Hermes did not confirm the opened chat's workspace.");
     setRecent((previous) => ({
       ...previous,
       [worktree.path]: Date.now(),

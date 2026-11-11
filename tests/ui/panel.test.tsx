@@ -601,6 +601,71 @@ describe("Timber worktrees", () => {
     expect(host.openSession).not.toHaveBeenCalled();
   });
 
+  it("opens a new session in a worktree that has none", async () => {
+    rest.mockImplementation(async (path) =>
+      path.startsWith("/sessions?") ? { sessions: [] } : state,
+    );
+    host.request.mockImplementation(async (method) => {
+      if (method === "projects.set_active") return { active_id: "project-app" };
+      if (method === "session.create")
+        return { stored_session_id: "new-1", info: { cwd: done.path } };
+      if (method === "session.workspace.move") throw new Error("move refused");
+      return null;
+    });
+    mountPanel();
+    await loaded();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Open session in done@app" }),
+    );
+    await waitFor(() =>
+      expect(host.request).toHaveBeenCalledWith("session.create", {
+        cwd: done.path,
+        cwd_explicit: true,
+        title: "done@app",
+        source: "desktop",
+        profile: "default",
+      }),
+    );
+    await waitFor(() =>
+      expect(host.openSession).toHaveBeenCalledWith(
+        "new-1",
+        expect.objectContaining({ profile: "default" }),
+      ),
+    );
+    await waitFor(() =>
+      expect(host.notify).toHaveBeenCalledWith({
+        kind: "success",
+        message: "Opened done@app in Hermes.",
+      }),
+    );
+  });
+
+  it("opens a new session in a repository with no Hermes Project", async () => {
+    rest.mockImplementation(async (path) => {
+      if (path.startsWith("/sessions?")) return { sessions: [] };
+      return { ...state, projects: {} };
+    });
+    const requested: string[] = [];
+    host.request.mockImplementation(async (method) => {
+      requested.push(method);
+      if (method === "session.create")
+        return { stored_session_id: "new-2", info: { cwd: done.path } };
+      return null;
+    });
+    mountPanel();
+    await loaded();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Open session in done@app" }),
+    );
+    await waitFor(() =>
+      expect(host.openSession).toHaveBeenCalledWith(
+        "new-2",
+        expect.objectContaining({ profile: "default" }),
+      ),
+    );
+    expect(requested).not.toContain("projects.set_active");
+  });
+
   it("selects push, merge, open-PR, and create-PR actions from PR state", async () => {
     const ready: Worktree = {
       name: "ready",

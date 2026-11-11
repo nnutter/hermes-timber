@@ -1071,19 +1071,19 @@ function WorktreeView({
     } catch {
     }
     const project = data?.projects[worktree.repo];
-    if (!project)
-      throw new Error(
-        "No Hermes Project exists for this repository. Run Sync Projects from the command palette first."
-      );
-    const selected = await host2.request("projects.set_active", {
-      id: project,
-      profile
-    });
-    check();
-    if (!record(selected) || selected.active_id !== project)
-      throw new Error("Hermes did not activate the repository Project.");
+    if (project) {
+      try {
+        await host2.request("projects.set_active", {
+          id: project,
+          profile
+        });
+      } catch {
+      }
+      check();
+    }
     const created = await host2.request("session.create", {
       cwd: worktree.path,
+      cwd_explicit: true,
       title: sessionTitle(worktree),
       source: "desktop",
       profile
@@ -1100,14 +1100,15 @@ function WorktreeView({
       keepAllProfilesScope: true
     });
     check();
-    const moved = await host2.request("session.workspace.move", {
-      session_key: created.stored_session_id,
-      cwd: worktree.path,
-      profile
-    });
+    try {
+      await host2.request("session.workspace.move", {
+        session_key: created.stored_session_id,
+        cwd: worktree.path,
+        profile
+      });
+    } catch {
+    }
     check();
-    if (!record(moved) || moved.cwd !== worktree.path)
-      throw new Error("Hermes did not confirm the opened chat's workspace.");
     setRecent((previous) => ({
       ...previous,
       [worktree.path]: Date.now()
