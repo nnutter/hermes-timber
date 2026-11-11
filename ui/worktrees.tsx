@@ -190,7 +190,6 @@ export function WorktreeView({
   const [prTitle, setPrTitle] = useState("");
   const [prBody, setPrBody] = useState("");
   const [preview, setPreview] = useState<RemovePreview | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [blockedCreate, setBlockedCreate] = useState(false);
   const [blockedAdd, setBlockedAdd] = useState(false);
   const [running, setRunning] = useState<Set<string>>(() => new Set());
@@ -290,7 +289,7 @@ export function WorktreeView({
     if (refreshed.error) throw refreshed.error;
     assertScope(scope);
   };
-  const notify = (kind: "success" | "warning", message: string) => {
+  const notify = (kind: "success" | "warning" | "error", message: string) => {
     host.notify({ kind, message });
   };
   const notifyAction = (warnings: string[], message: string) => {
@@ -331,12 +330,13 @@ export function WorktreeView({
       try {
         await action();
       } catch (failure) {
-        if (authenticationFailure(failure)) setAuthenticationRequired(true);
-        setError(message(failure));
+        const signedOut = authenticationFailure(failure);
+        if (signedOut) setAuthenticationRequired(true);
+        else notify("error", message(failure));
         setPreview(null);
         if (kind === "create") setBlockedCreate(true);
         if (kind === "add") setBlockedAdd(true);
-        if (!authenticationFailure(failure)) {
+        if (!signedOut) {
           try {
             await refresh();
           } catch {
@@ -623,7 +623,7 @@ export function WorktreeView({
   function renameRepository(repo: string) {
     const to = renameTo.trim();
     if (!to) {
-      setError("Enter the new repository name.");
+      notify("error", "Enter the new repository name.");
       return;
     }
     run(repoActionId("repo-rename", repo), async () => {
@@ -1019,11 +1019,10 @@ export function WorktreeView({
             refresh.
           </p>
         )}
-        {error && !authenticationRequired && (
-          <p role="alert">
-            {error}
-            {(blockedAdd || blockedCreate) &&
-              " The operation may have partially completed. Review the listing, then use Refresh before retrying."}
+        {(blockedAdd || blockedCreate) && !authenticationRequired && (
+          <p role="status">
+            The last attempt may have partially completed. Review the listing,
+            then use Refresh before retrying.
           </p>
         )}
         {data?.warnings.length ? (
@@ -1569,7 +1568,6 @@ export function WorktreeView({
                         setPrWorktree(worktree);
                         setPrTitle("");
                         setPrBody("");
-                        setError(null);
                       }}
                     />
                   </div>
@@ -1703,7 +1701,6 @@ export function WorktreeView({
               if (errors.length)
                 notify("warning", `Fetch reported: ${errors.join("; ")}`);
               else notify("success", "Worktrees and remotes refreshed.");
-              setError(null);
               setBlockedCreate(false);
               setBlockedAdd(false);
             })

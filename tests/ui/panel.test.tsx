@@ -442,9 +442,16 @@ describe("Timber worktrees", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Create worktree" }),
     );
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Creation outcome unknown",
+    await waitFor(() =>
+      expect(host.notify).toHaveBeenCalledWith({
+        kind: "error",
+        message: "Creation outcome unknown; refresh before retrying",
+      }),
     );
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/may have partially completed/),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Create worktree" }),
     ).toBeDisabled();
@@ -582,9 +589,15 @@ describe("Timber worktrees", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Open session in done@app" }),
     );
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "did not confirm the requested working directory",
+    await waitFor(() =>
+      expect(host.notify).toHaveBeenCalledWith({
+        kind: "error",
+        message: expect.stringContaining(
+          "did not confirm the requested working directory",
+        ),
+      }),
     );
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(host.openSession).not.toHaveBeenCalled();
   });
 
@@ -696,6 +709,52 @@ describe("Timber worktrees", () => {
         body: { repo: "app", name: "nopr", title: "Title", body: "" },
       }),
     );
+  });
+
+  it("reports a failed merge as an error toast, not a panel alert", async () => {
+    const ready: Worktree = {
+      name: "ready",
+      repo: "app",
+      path: "/trees/app/ready",
+      clean: true,
+      merged: false,
+      statusError: false,
+      ahead: 1,
+      behind: 0,
+      commit: "r",
+    };
+    const blocker =
+      "Cannot merge PR #7: GitHub blocks the merge: a required check or review is missing, or a thread is unresolved";
+    const prs: Record<string, PrEntry> = {
+      ["app\0ready"]: {
+        number: 7,
+        url: "https://github.com/o/r/pull/7",
+        title: "Ready",
+        destExists: true,
+        unpushed: 0,
+        ff: true,
+        mergeBlocker: null,
+        checks: "passed",
+        repo: "o/r",
+        stack: null,
+      },
+    };
+    rest.mockImplementation(async (path) => {
+      if (path === "/merge") throw new Error(blocker);
+      return { ...state, worktrees: [ready], prs };
+    });
+    mountPanel();
+    const list = await loaded("ready");
+    await userEvent.click(
+      within(list).getByRole("button", { name: "Merge PR #7" }),
+    );
+    await waitFor(() =>
+      expect(host.notify).toHaveBeenCalledWith({
+        kind: "error",
+        message: blocker,
+      }),
+    );
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("syncs projects from the palette once", async () => {

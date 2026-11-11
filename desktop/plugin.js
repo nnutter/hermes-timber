@@ -884,7 +884,6 @@ function WorktreeView({
   const [prTitle, setPrTitle] = useState2("");
   const [prBody, setPrBody] = useState2("");
   const [preview, setPreview] = useState2(null);
-  const [error, setError] = useState2(null);
   const [blockedCreate, setBlockedCreate] = useState2(false);
   const [blockedAdd, setBlockedAdd] = useState2(false);
   const [running, setRunning] = useState2(() => /* @__PURE__ */ new Set());
@@ -1009,12 +1008,13 @@ function WorktreeView({
       try {
         await action();
       } catch (failure) {
-        if (authenticationFailure(failure)) setAuthenticationRequired(true);
-        setError(message(failure));
+        const signedOut = authenticationFailure(failure);
+        if (signedOut) setAuthenticationRequired(true);
+        else notify("error", message(failure));
         setPreview(null);
         if (kind === "create") setBlockedCreate(true);
         if (kind === "add") setBlockedAdd(true);
-        if (!authenticationFailure(failure)) {
+        if (!signedOut) {
           try {
             await refresh();
           } catch {
@@ -1254,7 +1254,7 @@ function WorktreeView({
   function renameRepository(repo) {
     const to = renameTo.trim();
     if (!to) {
-      setError("Enter the new repository name.");
+      notify("error", "Enter the new repository name.");
       return;
     }
     run(repoActionId("repo-rename", repo), async () => {
@@ -1638,10 +1638,7 @@ function WorktreeView({
                 message(listing.error),
                 " Actions are disabled until a successful refresh."
               ] }),
-              error && !authenticationRequired && /* @__PURE__ */ jsxs2("p", { role: "alert", children: [
-                error,
-                (blockedAdd || blockedCreate) && " The operation may have partially completed. Review the listing, then use Refresh before retrying."
-              ] }),
+              (blockedAdd || blockedCreate) && !authenticationRequired && /* @__PURE__ */ jsx2("p", { role: "status", children: "The last attempt may have partially completed. Review the listing, then use Refresh before retrying." }),
               data?.warnings.length ? /* @__PURE__ */ jsx2("div", { "aria-label": "Backend warnings", children: data.warnings.map((text, index) => /* @__PURE__ */ jsx2("p", { style: muted2, children: text }, index)) }) : null,
               adding && /* @__PURE__ */ jsxs2(
                 "form",
@@ -2188,7 +2185,6 @@ function WorktreeView({
                                         setPrWorktree(worktree);
                                         setPrTitle("");
                                         setPrBody("");
-                                        setError(null);
                                       }
                                     }
                                   )
@@ -2319,7 +2315,6 @@ function WorktreeView({
                     if (errors.length)
                       notify("warning", `Fetch reported: ${errors.join("; ")}`);
                     else notify("success", "Worktrees and remotes refreshed.");
-                    setError(null);
                     setBlockedCreate(false);
                     setBlockedAdd(false);
                   }),
