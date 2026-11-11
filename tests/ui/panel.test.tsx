@@ -728,6 +728,13 @@ describe("Timber worktrees", () => {
       placement: "right",
       width: "440px",
       collapsible: true,
+      hideOnly: true,
+    });
+    expect(panes[1]?.data).toEqual({
+      placement: "right",
+      width: "400px",
+      collapsible: true,
+      hideOnly: true,
     });
     const routes = contributions
       .filter((item) => item.area === "routes")

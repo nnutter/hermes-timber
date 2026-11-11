@@ -2710,7 +2710,8 @@ var plugin = {
         data: {
           placement: "right",
           width: "440px",
-          collapsible: true
+          collapsible: true,
+          hideOnly: true
         },
         render: () => /* @__PURE__ */ jsx5(TimberPanel, { context })
       },
@@ -2721,7 +2722,8 @@ var plugin = {
         data: {
           placement: "right",
           width: "400px",
-          collapsible: true
+          collapsible: true,
+          hideOnly: true
         },
         render: () => /* @__PURE__ */ jsx5(TimberTodosPanel, { context })
       },
