@@ -15,6 +15,10 @@ dev = [
   "ty>=0.0.1",
 ]
 
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]
+
 [tool.ruff]
 target-version = "py313"
 line-length = 100
@@ -31,7 +35,3 @@ extra-paths = ["typings"]
 
 [tool.ty.rules]
 all = "error"
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-addopts = "-ra"

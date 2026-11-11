@@ -1,0 +1,10 @@
+root = true
+
+[*.sh]
+indent_style = space
+indent_size = 2
+
+# `scripts/sync-desktop` is an extensionless Bash executable.
+[scripts/*]
+indent_style = space
+indent_size = 2

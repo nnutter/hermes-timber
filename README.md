@@ -5,31 +5,38 @@ Each repository maps to one Hermes Project, with Timber's worktree base folder a
 
 ## Develop
 
-Install `mise`, `uv`, Git, and [Timber](https://github.com/nnutter/timber) first.
+Install `mise`, Git, and [Timber](https://github.com/nnutter/timber) first.
 Then run:
 
 ```sh
 mise trust
 mise install
-uv python install
-uv sync --locked
-mise exec -- npm ci
-uv run invoke fix
-uv run invoke build
-uv run invoke check
-uv run invoke test
+mise run setup
+mise run fix
+mise run build
+mise run check
+mise run test
+mise run doctor
+mise run smoke
 ```
 
-`mise.toml` pins Node.
+`mise.toml` pins Python, Node, and the development tools.
+`hk.pkl` is the single place that names the formatters, linters, and file patterns.
+`mise run fix` and `mise run check` delegate to `hk`; `mise run lint` and `mise run fmt` alias those commands.
 `uv` manages Python and the development dependencies.
-Invoke is the task entrypoint.
-The npm scripts are implementation details used by Invoke.
+Invoke is the task entrypoint for builds, packaging, and Hermes runtime checks.
+The npm scripts are implementation details used by Invoke and hk.
+The git hooks check and fix the staged files, and the `commit-msg` hook adds or preserves the Change-Id used by Timber review.
+
+`mise run doctor` validates the plugin with Hermes's real Plugin Doctor.
+`mise run smoke` exercises registration and the dashboard routes through the selected Hermes environment's Python with a temporary `HERMES_HOME`.
 
 The TypeScript configuration enables `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, and unused-code checks.
 The build bundles `ui/plugin.tsx` into `desktop/plugin.js` and leaves the three Hermes-supported imports external.
 The generated JavaScript is committed because the Hermes plugin loader does not compile TypeScript.
 The backend tests require a Hermes checkout at `~/.hermes/hermes-agent`, or a path supplied through `HERMES_SOURCE`.
 They use real Timber and Git with isolated homes and local origins.
+Set `HERMES_PYTHON` to override the interpreter that `mise run smoke` uses.
 
 ## Sync the Desktop UI from frame
 
@@ -93,16 +100,45 @@ uv run invoke package
 The archive is `dist/hermes-timber.zip`.
 It excludes Node modules, the Python environment, development tools, and tests.
 
-## Use the panel
+## Use the worktrees page and panel
 
-Use **Add repository** to register a gateway-local path or remote URL; credentials in URLs are rejected.
-Adding a repository also syncs Projects. If sync fails, the repository remains registered.
-Create worktrees from a registered repository.
-Leave the branch name empty to let Timber choose a name.
+The plugin adds two sidebar pages, **Timber** (`/timber`) and **Timber TODOs** (`/timber-todos`), and matching right-hand panes.
+The page uses the full window on narrow screens; the panes become overlays there.
+Both surfaces share the same state and refresh loop.
+
+The worktrees toolbar has a split **New worktree** button, a search field, a sort control, a **Repositories** menu, and a refresh button.
+Creating a worktree opens its session.
+A row links its repository and open pull request, and shows its TODO and review counts, ahead/behind counts, and exactly one action button chosen from the row's state.
+A private GitHub repository shows a small lock beside the worktree name.
+
+- **Delete** for a clean worktree that is merged or fully in sync, with no open stack PRs.
+- **Push** when the branch has unpushed commits over `origin/<branch>` and a fast-forward path.
+- **Merge** when the open PR can merge; otherwise the same button opens the PR and says why it cannot.
+- **Create PR** when the branch has no open PR.
+  Leave the subject empty to derive one from the commits ahead of the upstream.
+- **Blocked** when `origin/<branch>` has commits the worktree lacks.
+
+A worktree whose PR belongs to a GitHub stack lists the stack under the row.
+Each open PR in the stack has its own merge button; merging a lower PR merges the stack up to it, and the top PR merges the whole stack.
+Merging runs `gh pr merge` with the head commit pinned, or `gh stack merge` for a stack.
+Pushing runs `git push origin HEAD:<branch>` without changing the upstream or forcing.
+Clicking a row's ↓ count rebases the worktree onto its upstream (`git rebase @{u}`).
+It is available only for a clean worktree; a conflict aborts the rebase and reports the conflict, leaving the worktree unchanged.
+Refresh runs `timber git @repo -- fetch` for every repository with worktrees; the gateway also fetches every five minutes.
+
+The **Timber TODOs** page shows one worktree's `TODO.md`, or the repository's shared `TODO.repo.md`.
+It follows the session's folder, with a picker for another worktree and a Worktree/Repository toggle.
+A task is added in one field, ticked to done, or removed with two taps.
+
+Use **Import repo** in the toolbar's menu to register a gateway-local path or remote URL; credentials in URLs are rejected.
+Adding a repository also syncs Projects.
+If sync fails, the repository remains registered.
+The **Repositories** menu renames a repository (moving its worktree folders) and removes one only when it has no worktrees.
+Create worktrees from a registered repository; leave the branch name empty to let Timber choose a name.
 The plugin uses `--no-herdr` and does not enable mise trust or repository hooks.
 Existing Timber configuration can still run repository setup during creation.
 
-Run **Sync Projects** from the command palette to reconcile existing worktrees with Hermes Projects, even when the Timber panel is closed.
+Run **Sync Projects** from the command palette to reconcile existing worktrees with Hermes Projects, even when the panel is closed.
 Listing worktrees does not create or modify Projects.
 Sync associates `$TIMBER_WORKTREE_ROOT/<repo-name>` (default `~/worktrees/<repo-name>`) so sessions in Timber-managed checkouts inherit the repository Project.
 Checkouts outside that base folder are associated individually.
@@ -112,12 +148,15 @@ Empty repository Projects remain available after cleanup.
 Successful reads poll every 15 seconds.
 Read failures back off to 30, 60, 120, 240, and then 300 seconds, with the delay reset after success.
 HTTP 401 or 403 and recognized sign-in failures pause automatic requests instead of retrying.
-Sign in through Hermes Connections, then select **Retry after sign-in** to resume reads.
+Sign in through Hermes Connections, then select **Refresh** to resume reads.
 A WebSocket reconnect alone does not clear this pause because REST and WebSocket authentication can differ.
-Create, remove, and sync operations never retry automatically, including after sign-in.
+Mutations never retry automatically, including after sign-in.
+
+The open button reuses the newest session already in the worktree's folder and creates one only when the folder has none.
+Removal archives the sessions that worked in that folder after the checkout is gone.
 
 Cleanup removes both the worktree directory and its branch.
-The plugin permits cleanup only for clean, merged worktrees with a known status.
+The plugin permits cleanup only for clean worktrees that are merged or fully in sync (0 ahead, 0 behind), with a known status and no open PRs in the worktree's stack.
 Ignored files also block cleanup, even when Timber reports the worktree as clean.
 Sync preserves an existing checkout's folder when Timber omits the checkout, including detached worktrees.
 A confirmation applies to the exact previewed worktree state and expires.
@@ -126,15 +165,26 @@ Do not use cleanup as a backup for local notes or commits.
 
 ## Repository HTTP contract
 
-`POST /repositories` accepts `{"source": "URL or path", "name": "", "alias": ""}`; name and alias are optional. It returns `{"repository": "registered name", "warnings": []}` only after a clean command and listing confirm one new repository. On failure or an uncertain outcome it returns an error; refresh and inspect Timber before retrying. No repository is removed automatically.
+`POST /repositories` accepts `{"source": "URL or path", "name": "", "alias": ""}`; name and alias are optional.
+It returns `{"repository": "registered name", "warnings": []}` only after a clean command and listing confirm one new repository.
+On failure or an uncertain outcome it returns an error; refresh and inspect Timber before retrying.
+No repository is removed automatically.
+
+The remaining routes are `GET /state`, `POST /fetch`, `/create`, `/repo-rename`, `/repo-remove`, `/pr`, `/push`, `/rebase`, `/merge`, `/remove/preview`, `/remove`, `/todo`, `/todo-add`, `/todo-toggle`, `/todo-remove`, `GET /sessions`, and `POST /sessions/archive`.
+The UI parses every response defensively; the backend re-reads the listing before a mutation and refuses diagnostics rather than acting on an uncertain listing.
 
 ## Explore the code
 
-- `ui/plugin.tsx` is the Desktop entrypoint.
-- `dashboard/plugin_api.py` owns the backend routes, Timber operations, and Project reconciliation.
+- `ui/plugin.tsx` is the Desktop entrypoint; it registers both pages, sidebar links, panes, commands, and the shortcut.
+- `ui/worktrees.tsx` owns the worktree toolbar, rows, repository forms, PR form, and removal consent.
+- `ui/todos.tsx` owns the TODO page and pane.
+- `ui/actions.ts` chooses each row's single action, its color, and the search/sort behavior.
+- `dashboard/plugin_api.py` owns the backend routes, Timber operations, PR cache, TODOs, sessions, and Project reconciliation.
 - `typings/` describes the Hermes Python APIs consumed by the backend.
 - `tests/` protects the backend contracts and Desktop user actions.
-- `tasks.py` owns the development and packaging commands.
+- `mise.toml` and `hk.pkl` own the development environment and file checks.
+- `tasks.py` owns the development, packaging, and Hermes runtime commands.
+- `scripts/smoke.py` exercises the installed plugin contracts through Hermes's Python.
 
 Hermes owns the Projects database schema.
 The plugin uses Hermes' Project functions instead of editing that schema directly.
