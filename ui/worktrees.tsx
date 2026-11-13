@@ -620,10 +620,11 @@ export function WorktreeView({
         setSource("");
         setRepoName("");
         setAlias("");
-        notifyAction(
-          responseWarnings(response),
-          `Added repository ${response.repository}.`,
-        );
+        if (responseWarnings(response).length)
+          notify(
+            "warning",
+            `Imported ${response.repository}, but setup needs attention. Check the repository and run Sync Projects to retry.`,
+          );
         await refresh();
       },
       "add",

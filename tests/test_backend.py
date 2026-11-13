@@ -567,15 +567,28 @@ def test_remove_failure_preserves_checkout_and_membership(
 	assert sandbox.client.post("/remove", json={"token": token}).status_code == 409
 
 
-def test_add_repository_real_timber(sandbox: Sandbox) -> None:
+@pytest.mark.parametrize("existing_project", ["unmapped", "archived", "deleted"])
+def test_add_repository_real_timber(sandbox: Sandbox, existing_project: str) -> None:
+	if existing_project != "unmapped":
+		synced = sandbox.client.post("/sync", json={})
+		assert synced.status_code == 200, synced.text
+		pid = sandbox.state().projects["example/demo"]
+		with contextlib.closing(projects_db.connect()) as db:
+			if existing_project == "archived":
+				projects_db.archive_project(db, pid)
+			else:
+				projects_db.delete_project(db, pid)
 	response = sandbox.client.post(
 		"/repositories",
 		json={"source": str(sandbox.root / "origin"), "name": "other/repo", "alias": "short"},
 	)
 	assert response.status_code == 200, response.text
 	assert response.json()["repository"] == "other/repo"
+	assert response.json()["warnings"] == []
 	assert "other/repo" in sandbox.state().repositories
-	assert set(sandbox.state().projects) == {"example/demo", "other/repo"}
+	assert set(sandbox.state().projects) == (
+		{"other/repo"} if existing_project == "unmapped" else {"example/demo", "other/repo"}
+	)
 
 
 @pytest.mark.parametrize("source", ["-bad", "bad\npath", "https://user:secret@example.com/repo"])
