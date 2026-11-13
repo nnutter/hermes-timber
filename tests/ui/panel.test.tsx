@@ -463,47 +463,70 @@ describe("Timber worktrees", () => {
     );
   });
 
-  it("imports a repository from the toolbar menu", async () => {
-    let added = false;
-    rest.mockImplementation(async (path) => {
-      if (path === "/repositories") {
-        added = true;
-        return { repository: "new/repo", warnings: ["Project sync failed"] };
+  it.each([false, true])(
+    "imports a repository from the toolbar menu (setup warnings: %s)",
+    async (hasWarnings) => {
+      let added = false;
+      rest.mockImplementation(async (path) => {
+        if (path === "/repositories") {
+          added = true;
+          return {
+            repository: "new/repo",
+            warnings: hasWarnings
+              ? Array.from(
+                  { length: 20 },
+                  (_, index) => `Project sync failed: ${index}`,
+                )
+              : [],
+          };
+        }
+        if (path === "/fetch") return { fetchedAt: 1, errors: [] };
+        return added
+          ? { ...state, repositories: ["new/repo", "app", "lib", "empty"] }
+          : state;
+      });
+      mountPanel();
+      await loaded();
+      await userEvent.click(
+        screen.getByRole("button", { name: "More actions" }),
+      );
+      await userEvent.click(
+        screen.getByRole("menuitem", { name: "Import repo" }),
+      );
+      await userEvent.type(
+        screen.getByLabelText("Repository URL or path"),
+        "/tmp/origin",
+      );
+      await userEvent.type(
+        screen.getByLabelText("Repository name (optional)"),
+        "new/repo",
+      );
+      await userEvent.type(screen.getByLabelText("Alias (optional)"), "short");
+      await userEvent.click(screen.getByRole("button", { name: "Add repo" }));
+      await waitFor(() =>
+        expect(rest).toHaveBeenCalledWith("/repositories", {
+          method: "POST",
+          body: { source: "/tmp/origin", name: "new/repo", alias: "short" },
+        }),
+      );
+      await userEvent.click(
+        screen.getByRole("button", { name: "New worktree" }),
+      );
+      await screen.findByRole("option", { name: "new/repo" });
+      expect(
+        screen.queryByLabelText("Repository URL or path"),
+      ).not.toBeInTheDocument();
+      if (hasWarnings) {
+        expect(host.notify).toHaveBeenCalledExactlyOnceWith({
+          kind: "warning",
+          message:
+            "Imported new/repo, but setup needs attention. Check the repository and run Sync Projects to retry.",
+        });
+      } else {
+        expect(host.notify).not.toHaveBeenCalled();
       }
-      if (path === "/fetch") return { fetchedAt: 1, errors: [] };
-      return added
-        ? { ...state, repositories: ["new/repo", "app", "lib", "empty"] }
-        : state;
-    });
-    mountPanel();
-    await loaded();
-    await userEvent.click(screen.getByRole("button", { name: "More actions" }));
-    await userEvent.click(
-      screen.getByRole("menuitem", { name: "Import repo" }),
-    );
-    await userEvent.type(
-      screen.getByLabelText("Repository URL or path"),
-      "/tmp/origin",
-    );
-    await userEvent.type(
-      screen.getByLabelText("Repository name (optional)"),
-      "new/repo",
-    );
-    await userEvent.type(screen.getByLabelText("Alias (optional)"), "short");
-    await userEvent.click(screen.getByRole("button", { name: "Add repo" }));
-    await waitFor(() =>
-      expect(rest).toHaveBeenCalledWith("/repositories", {
-        method: "POST",
-        body: { source: "/tmp/origin", name: "new/repo", alias: "short" },
-      }),
-    );
-    await waitFor(() =>
-      expect(host.notify).toHaveBeenCalledWith({
-        kind: "warning",
-        message: expect.stringContaining("Project sync failed"),
-      }),
-    );
-  });
+    },
+  );
 
   it("previews and confirms a removal with a token", async () => {
     let removed = false;

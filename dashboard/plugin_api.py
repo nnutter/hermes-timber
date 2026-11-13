@@ -1551,7 +1551,11 @@ def fingerprint(path: str, label: str | None, primary: bool, added: int) -> str:
 
 
 def reconcile(
-	db: sqlite3.Connection, items: Listing, *, prune_only: bool = False
+	db: sqlite3.Connection,
+	items: Listing,
+	*,
+	prune_only: bool = False,
+	repository: str | None = None,
 ) -> tuple[dict[str, str], list[str]]:
 	from hermes_cli import projects_db as projects
 
@@ -1564,6 +1568,8 @@ def reconcile(
 			str(repo): str(pid) for repo, pid in db.execute("SELECT repo,project FROM mappings")
 		}
 		for repo in items.repositories:
+			if repository is not None and repo != repository:
+				continue
 			base = _worktree_base_path(repo)
 			paths = {wt.path for wt in items.worktrees if wt.repo == repo}
 			paths.add(str(base))
@@ -1739,14 +1745,15 @@ def add_repository(body: RepositoryAdd) -> RepositoryAdded:
 			)
 			else []
 		)
+		repository = added.pop()
 		try:
-			_, sync_warnings = reconcile(db, after)
+			_, sync_warnings = reconcile(db, after, repository=repository)
 			warnings.extend(sync_warnings)
 		except (HTTPException, sqlite3.Error, ValueError, OSError) as exc:
 			warnings.append(
 				f"Repository added, but Project sync failed; use Sync Projects to retry: {exc}"
 			)
-		return RepositoryAdded(repository=added.pop(), warnings=warnings)
+		return RepositoryAdded(repository=repository, warnings=warnings)
 
 
 @router.post("/create")
