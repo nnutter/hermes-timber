@@ -374,60 +374,75 @@ describe("Timber worktrees", () => {
     );
   });
 
-  it("creates a worktree and opens its session", async () => {
-    let created = false;
-    rest.mockImplementation(async (path) => {
-      if (path === "/create") {
-        created = true;
-        return { worktree: done, warnings: ["Project synchronized"] };
+  it.each([false, true])(
+    "creates a worktree and opens its session (setup warnings: %s)",
+    async (hasWarnings) => {
+      let created = false;
+      rest.mockImplementation(async (path) => {
+        if (path === "/create") {
+          created = true;
+          return {
+            worktree: done,
+            warnings: hasWarnings
+              ? Array.from(
+                  { length: 20 },
+                  (_, index) => `Project sync failed: ${index}`,
+                )
+              : [],
+          };
+        }
+        if (path.startsWith("/sessions?")) return { sessions: [] };
+        return created ? { ...state, worktrees: [done] } : state;
+      });
+      host.request.mockImplementation(async (method) => {
+        if (method === "projects.set_active")
+          return { active_id: "project-app" };
+        if (method === "session.create")
+          return { stored_session_id: "s1", info: { cwd: done.path } };
+        if (method === "session.workspace.move") return { cwd: done.path };
+        return null;
+      });
+      mountPanel();
+      await loaded();
+      await userEvent.click(
+        screen.getByRole("button", { name: "New worktree" }),
+      );
+      await userEvent.selectOptions(
+        screen.getByLabelText("Create repository"),
+        "empty",
+      );
+      await userEvent.type(
+        screen.getByLabelText("Upstream (optional)"),
+        "origin/main",
+      );
+      await userEvent.click(
+        screen.getByRole("button", { name: "Create worktree" }),
+      );
+      await waitFor(() =>
+        expect(rest).toHaveBeenCalledWith("/create", {
+          method: "POST",
+          body: { repo: "empty", name: "", upstream: "origin/main" },
+        }),
+      );
+      if (hasWarnings) {
+        expect(host.notify).toHaveBeenCalledExactlyOnceWith({
+          kind: "warning",
+          message:
+            "Created done@app, but setup needs attention. Check the worktree and run Sync Projects to retry.",
+        });
+      } else {
+        expect(host.notify).toHaveBeenCalledExactlyOnceWith({
+          kind: "success",
+          message: "Created done@app.",
+        });
       }
-      if (path.startsWith("/sessions?")) return { sessions: [] };
-      return created ? { ...state, worktrees: [done] } : state;
-    });
-    host.request.mockImplementation(async (method) => {
-      if (method === "projects.set_active") return { active_id: "project-app" };
-      if (method === "session.create")
-        return { stored_session_id: "s1", info: { cwd: done.path } };
-      if (method === "session.workspace.move") return { cwd: done.path };
-      return null;
-    });
-    mountPanel();
-    await loaded();
-    await userEvent.click(screen.getByRole("button", { name: "New worktree" }));
-    await userEvent.selectOptions(
-      screen.getByLabelText("Create repository"),
-      "empty",
-    );
-    await userEvent.type(
-      screen.getByLabelText("Upstream (optional)"),
-      "origin/main",
-    );
-    await userEvent.click(
-      screen.getByRole("button", { name: "Create worktree" }),
-    );
-    await waitFor(() =>
-      expect(rest).toHaveBeenCalledWith("/create", {
-        method: "POST",
-        body: { repo: "empty", name: "", upstream: "origin/main" },
-      }),
-    );
-    await waitFor(() =>
-      expect(host.notify).toHaveBeenCalledWith({
-        kind: "warning",
-        message: expect.stringContaining("Created done@app."),
-      }),
-    );
-    expect(
-      host.notify.mock.calls.some(([input]) =>
-        input.message.includes("Project synchronized"),
-      ),
-    ).toBe(true);
-    expect(host.openSession).toHaveBeenCalledWith(
-      "s1",
-      expect.objectContaining({ profile: "default" }),
-    );
-    await screen.findByText("1 of 1 worktrees");
-  });
+      expect(host.openSession).toHaveBeenCalledWith(
+        "s1",
+        expect.objectContaining({ profile: "default" }),
+      );
+      await screen.findByText("1 of 1 worktrees");
+    },
+  );
 
   it("blocks create retries until a refresh clears the uncertainty", async () => {
     rest.mockImplementation(async (path) => {
