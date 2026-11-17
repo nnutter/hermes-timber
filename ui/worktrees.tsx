@@ -579,17 +579,16 @@ export function WorktreeView({
         await refresh();
         try {
           await open(created, false);
-          notifyAction(
-            createdWarnings,
-            `Created ${created.name}@${created.repo}.`,
-          );
+          if (createdWarnings.length)
+            notify(
+              "warning",
+              `Created ${created.name}@${created.repo}, but setup needs attention. Check the worktree and run Sync Projects to retry.`,
+            );
+          else notify("success", `Created ${created.name}@${created.repo}.`);
         } catch (failure) {
           notify(
             "warning",
-            [
-              `Created ${created.name}@${created.repo}, but its session did not open: ${message(failure)}`,
-              ...createdWarnings,
-            ].join("\n"),
+            `Created ${created.name}@${created.repo}, but its session did not open: ${message(failure)}`,
           );
         }
       },

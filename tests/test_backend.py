@@ -591,6 +591,31 @@ def test_add_repository_real_timber(sandbox: Sandbox, existing_project: str) -> 
 	)
 
 
+@pytest.mark.parametrize("existing_project", ["unmapped", "archived", "deleted"])
+def test_create_scopes_project_sync(sandbox: Sandbox, existing_project: str) -> None:
+	if existing_project != "unmapped":
+		synced = sandbox.client.post("/sync", json={})
+		assert synced.status_code == 200, synced.text
+		pid = sandbox.state().projects["example/demo"]
+		with contextlib.closing(projects_db.connect()) as db:
+			if existing_project == "archived":
+				projects_db.archive_project(db, pid)
+			else:
+				projects_db.delete_project(db, pid)
+	added = sandbox.client.post(
+		"/repositories",
+		json={"source": str(sandbox.root / "origin"), "name": "other/repo", "alias": "short"},
+	)
+	assert added.status_code == 200, added.text
+	response = sandbox.client.post("/create", json={"repo": "other/repo", "name": "feature"})
+	assert response.status_code == 200, response.text
+	created = api.Created.model_validate(response.json())
+	assert created.worktree.repo == "other/repo"
+	assert created.worktree.name == "feature"
+	assert created.warnings == []
+	assert Path(created.worktree.path).is_dir()
+
+
 @pytest.mark.parametrize("source", ["-bad", "bad\npath", "https://user:secret@example.com/repo"])
 def test_add_repository_rejects_unsafe_source(sandbox: Sandbox, source: str) -> None:
 	response = sandbox.client.post("/repositories", json={"source": source})

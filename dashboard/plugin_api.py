@@ -1800,7 +1800,7 @@ def create(body: Create) -> Created:
 				502, f"Creation not verified; refresh before retrying. {failure or ''}"
 			)
 		try:
-			_, warnings = reconcile(db, after)
+			_, warnings = reconcile(db, after, repository=body.repo)
 		except (HTTPException, sqlite3.Error, ValueError, OSError) as exc:
 			warnings = [f"Checkout created, but Project sync failed; use Sync to retry: {exc}"]
 		if failure is not None:
